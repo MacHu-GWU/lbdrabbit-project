@@ -18,6 +18,7 @@ class BaseConfig(object):
 
     - 所有必要的属性都给予 ``REQUIRED`` 默认值
     - 所有可选的属性都给予 ``NOTHING`` 默认值
+    - ``_default`` 中只定义那些 一定会有用到, 但是值不一定的值
     """
     _default = dict()  # type: dict
 
