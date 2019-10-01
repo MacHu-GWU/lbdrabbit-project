@@ -15,6 +15,6 @@ __github_username__ = "MacHu-GWU"
 
 
 try:
-    from .app import AppConfig, App
+    from .app import AppConfig, App, Constant, Derivable
 except ImportError:
     pass
