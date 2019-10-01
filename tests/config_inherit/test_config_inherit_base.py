@@ -2,7 +2,9 @@
 
 import pytest
 import attr
-from lbdrabbit.config_inherit.base import BaseConfig, REQUIRED, NOTHING
+from importlib import import_module
+from lbdrabbit.config_inherit.base import BaseConfig, REQUIRED, NOTHING, config_inherit_handler
+from lbdrabbit.const import VALID_LBD_HANDLER_FUNC_NAME_LIST
 
 
 @attr.s
@@ -60,6 +62,60 @@ class TestBaseConfig(object):
         assert c.info is NOTHING
         c.post_init_hooker()
         assert isinstance(c.info, str)
+
+
+def access_value(path):
+    """
+    helper method to access value of a field in LbdFuncConfig
+    """
+    parts = path.split(".")
+    key = parts[-1]
+    config_field = parts[-2]
+    try:
+        return getattr(
+            getattr(
+                import_module(".".join(parts[:-2])),
+                config_field
+            ),
+            key
+        )
+    except:
+        return getattr(
+            getattr(
+                getattr(
+                    import_module(".".join(parts[:-3])),
+                    parts[-3]
+                ),
+                config_field
+            ),
+            key
+        )
+
+
+def test_config_inherit_handler():
+    root_module_name = "lbdrabbit.tests.handlers"
+    config_field = "__lbd_func_config__"
+
+    config_inherit_handler(
+        module_name=root_module_name,
+        config_field=config_field,
+        config_class=LbdFuncConfig,
+        valid_func_name_list=VALID_LBD_HANDLER_FUNC_NAME_LIST,
+    )
+
+    assert access_value(f"{root_module_name}.{config_field}.memory") == 128
+    assert access_value(f"{root_module_name}.{config_field}.timeout") == 3
+    assert access_value(f"{root_module_name}.{config_field}.alias") == "root"
+
+    assert access_value(f"{root_module_name}.rest.users.{config_field}.timeout") == 30
+
+    assert access_value(f"{root_module_name}.rest.users.get.{config_field}.timeout") == 30
+    assert access_value(f"{root_module_name}.rest.users.get.{config_field}.alias") == "rest.users.get"
+
+    assert access_value(f"{root_module_name}.rest.users.post.{config_field}.timeout") == 60
+    assert access_value(f"{root_module_name}.rest.users.post.{config_field}.alias") == "rest.users.post"
+
+    assert access_value(f"{root_module_name}.rest.users.any_.{config_field}.alias") == "users"
 
 
 if __name__ == "__main__":
