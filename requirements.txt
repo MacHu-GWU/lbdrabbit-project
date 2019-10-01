@@ -2,4 +2,4 @@ boto3
 attrs
 superjson==0.0.13
 configirl==0.0.6
-troposphere_mate==0.0.7
+troposphere_mate==0.0.8
