@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 
-from lbdrabbit.tests.auto_inherit_config import LbdFuncConfig
+from lbdrabbit.config_inherit import LbdFuncConfig
 
 __lbd_func_config__ = LbdFuncConfig(
     timeout=30,
-    alias="users"
 )
 
 users = {
