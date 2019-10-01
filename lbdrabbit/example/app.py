@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from lbdrabbit import App
+from lbdrabbit import App, AppConfig, Constant, Derivable
 
 
-app = App("example_app")
+class MyAppConfig(AppConfig):
+    pass
+
+
+app = App("example_app", app_config=MyAppConfig())
