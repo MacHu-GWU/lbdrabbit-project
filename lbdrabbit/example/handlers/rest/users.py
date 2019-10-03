@@ -3,7 +3,7 @@
 from lbdrabbit.config_inherit import LbdFuncConfig
 
 __lbd_func_config__ = LbdFuncConfig(
-    timeout=30,
+    lbd_func_timeout=30,
 )
 
 users = {
