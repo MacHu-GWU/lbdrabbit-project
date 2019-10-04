@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import re
 from lbdrabbit.config_inherit import LbdFuncConfig, ApiMethodIntType
 
 __lbd_func_config__ = LbdFuncConfig()

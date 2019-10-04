@@ -22,8 +22,10 @@ class ApiMethodIntType:
 
     _valid_values = set()
 
+
 for k, v in ApiMethodIntType.__dict__.items():
-    ApiMethodIntType._valid_values.add(v)
+    if not k.startswith("_"):
+        ApiMethodIntType._valid_values.add(v)
 
 
 @attr.s
@@ -39,6 +41,15 @@ class LbdFuncConfig(BaseConfig):
 
     **中文文档**
 
+
+
+    **设计**
+
+    - something_aws_object: 以 aws_object 结尾的 property 方法, 返回的是一个具体的
+        ``troposphere_mate.AWSObject`` 对象
+    - pre_exam
+    - create_something: 以 create 开头的方法会调用响应的 something_aws_object
+        方法, 不过在那之前,
 
     """
     param_env_name = attr.ib(default=REQUIRED)  # type: Parameter
@@ -71,6 +82,7 @@ class LbdFuncConfig(BaseConfig):
     apigw_method_yes = attr.ib(default=NOTHING)  # type: bool
     apigw_method_int_type = attr.ib(default=NOTHING)  # type: str
     _apigw_method_aws_object_cache = attr.ib(default=NOTHING)  # type: apigateway.Method
+    _apigw_method_lbd_permission_aws_object_cache = attr.ib(default=NOTHING)  # type: awslambda.Permission
 
     apigw_method_int_passthrough_behavior = attr.ib(default=NOTHING)  # type: str
     apigw_method_int_timeout_in_milli = attr.ib(default=NOTHING)  # type: int
@@ -90,8 +102,8 @@ class LbdFuncConfig(BaseConfig):
 
     _root_module_name = attr.ib(default=NOTHING)
     _py_module = attr.ib(default=NOTHING)
-    _py_parent_module = attr.ib(default=NOTHING)
     _py_function = attr.ib(default=NOTHING)
+    _py_parent_module = attr.ib(default=NOTHING)
 
     _default = dict(
         lbd_func_yes=True,
@@ -141,6 +153,18 @@ class LbdFuncConfig(BaseConfig):
             rel_module_name = rel_module_name[1:]
         return rel_module_name
 
+    def is_module(self):
+        if self._py_function is NOTHING:
+            return True
+        else:
+            return False
+
+    def is_function(self):
+        if self._py_function is NOTHING:
+            return False
+        else:
+            return True
+
     @property
     def lbd_func_logic_id(self) -> str:
         return "LbdFunc{}".format(
@@ -167,11 +191,7 @@ class LbdFuncConfig(BaseConfig):
                 "a Parameter represent a iam role ARN, "
                 "a string represent a iam role ARN".format(self.identifier))
 
-    @property
-    def lbd_func_aws_object(self) -> awslambda.Function:
-        if self.lbd_func_yes is not True:
-            return self._lbd_func_aws_object_cache
-
+    def lbd_func_aws_object_pre_check(self):
         if callable(self._py_function):
             try:
                 self._py_function.__name__
@@ -179,6 +199,11 @@ class LbdFuncConfig(BaseConfig):
                 raise TypeError("{}.{} is not a valid function".format(self._py_module.__name__, self._py_function))
         else:
             raise TypeError("{}.{} is not a valid function".format(self._py_module.__name__, self._py_function))
+
+    @property
+    def lbd_func_aws_object(self) -> awslambda.Function:
+        if self.lbd_func_yes is not True:
+            return self._lbd_func_aws_object_cache
 
         if self._lbd_func_aws_object_cache is NOTHING:
             lbd_func = awslambda.Function(
@@ -231,7 +256,44 @@ class LbdFuncConfig(BaseConfig):
 
     @property
     def apigw_resource_path_part(self) -> str:
+        """
+        The file name (without .py extension) of current module becomes
+        api gateway resource.
+        """
         return slugify(self._py_module.__name__.split(".")[-1])
+
+    @property
+    def apigw_resource_full_path(self) -> str:
+        """
+        if current_module = lbdrabbit.examples.handlers.rest.users.py,
+        root_module = lbdrabbit.examples.handlers
+
+        then the api gateway resource full path should be
+        ``rest/users``
+        """
+        return "/".join([
+            slugify(fname)
+            for fname in self.rel_module_name.split(".")
+        ])
+
+    def apigw_resource_aws_object_pre_check(self):
+        """
+
+        **中文文档**
+
+        检查根据当前的设置, 是否满足自动创建 troposphere_mate.apigateway.Resource 的条件
+
+        - LbdFuncConfig._py_function 必须为 None, 因为如果当前绑定了一个函数,
+            说明我们需要的是 Api Method 而不是 Api Resource
+        - LbdFuncConfig.apigw_restapi 必须被指定.
+        """
+        if self._py_function is not NOTHING:
+            raise ValueError("to create a apigateway.Resource, "
+                             "the config should not bound with a python function!")
+
+        if self.apigw_restapi is NOTHING:
+            raise ValueError("to create a apigateway.Resource, "
+                             "LbdFuncConfig.apigw_restapi has to be specified")
 
     @property
     def apigw_resource_aws_object(self) -> apigateway.Resource:
@@ -270,6 +332,23 @@ class LbdFuncConfig(BaseConfig):
                     format(self.identifier, ApiMethodIntType._valid_values)
             )
 
+    def apigw_method_aws_object_pre_check(self):
+        """
+        **中文文档**
+
+        检查根据当前的设置, 是否满足自动创建 troposphere_mate.apigateway.Method 的条件
+
+        - LbdFuncConfig._py_function 必须为Python函数, 不然没有LambdaFunction支持,
+            Api Method 就无法工作.
+        - LbdFuncConfig.apigw_restapi 必须被指定.
+        """
+        if self._py_function is NOTHING:
+            raise ValueError("to create a apigateway.Method, "
+                             "the config must be bound with a python function!")
+
+        if self.apigw_restapi is NOTHING:
+            raise ValueError("to create a apigateway.Resource, "
+                             "LbdFuncConfig.apigw_restapi has to be specified")
 
     @property
     def apigw_method_aws_object(self) -> apigateway.Method:
@@ -328,6 +407,43 @@ class LbdFuncConfig(BaseConfig):
             self._apigw_method_aws_object_cache = apigw_method
         return self._apigw_method_aws_object_cache
 
+    def apigw_method_lbd_permission_aws_object_pre_check(self):
+        self.apigw_method_aws_object_pre_check()
+        self.lbd_func_aws_object_pre_check()
+
+    @property
+    def apigw_method_lbd_permission_aws_object(self) -> awslambda.Permission:
+        if self.apigw_method_yes is not True:
+            return self._apigw_method_lbd_permission_aws_object_cache
+
+        if self._apigw_method_lbd_permission_aws_object_cache is NOTHING:
+            apigw_method_lbd_permission_logic_id = "LbdPermission{}".format(self.apigw_method_logic_id)
+            apigw_method_lbd_permission = awslambda.Permission(
+                title=apigw_method_lbd_permission_logic_id,
+                Action="lambda:InvokeFunction",
+                FunctionName=GetAtt(self.lbd_func_aws_object, "Arn"),
+                Principal="apigateway.amazonaws.com",
+                SourceArn=Sub(
+                    "arn:aws:execute-api:${Region}:${AccountId}:${RestApiId}/*/%s/%s" % \
+                    (
+                        "POST",
+                        self.apigw_resource_full_path
+                    ),
+                    {
+                        "Region": {"Ref": "AWS::Region"},
+                        "AccountId": {"Ref": "AWS::AccountId"},
+                        "RestApiId": Ref(self.apigw_restapi),
+                    }
+                ),
+                DependsOn=[
+                    self.apigw_method_aws_object,
+                    self.lbd_func_aws_object,
+                ]
+            )
+            self._apigw_method_lbd_permission_aws_object_cache = apigw_method_lbd_permission
+        return self._apigw_method_lbd_permission_aws_object_cache
+
+    # apigateway.Authorizer
     @classmethod
     def get_authorizer_id(cls, rel_module_name):
         return "ApigwAuthorizer{}".format(
@@ -337,6 +453,26 @@ class LbdFuncConfig(BaseConfig):
     @property
     def apigw_authorizer_logic_id(self) -> str:
         return self.get_authorizer_id(self.rel_module_name)
+
+    def apigw_authorizer_aws_object_pre_check(self):
+        """
+        **中文文档**
+
+        检查根据当前的设置, 是否满足自动创建 troposphere_mate.apigateway.Authorizer 的条件
+
+        目前只支持 CUSTOM 的 Lambda Authorizer
+
+        - LbdFuncConfig._py_function 必须为Python函数, 不然没有LambdaFunction支持,
+            Api Authorizer 就无法工作.
+        - LbdFuncConfig.apigw_restapi 必须被指定.
+        """
+        if self._py_function is NOTHING:
+            raise ValueError("to create a apigateway.Authorizer, "
+                             "the config must be bound with a python function!")
+
+        if self.apigw_restapi is NOTHING:
+            raise ValueError("to create a apigateway.Resource, "
+                             "LbdFuncConfig.apigw_restapi has to be specified")
 
     @property
     def apigw_authorizer_aws_object(self) -> apigateway.Authorizer:
@@ -376,6 +512,15 @@ class LbdFuncConfig(BaseConfig):
             )
             self._apigw_authorizer_aws_object_cache = apigw_authorizer
         return self._apigw_authorizer_aws_object_cache
+
+    def apigw_authorizer_lbd_permission_aws_object_pre_check(self):
+        """
+        **中文文档**
+
+        检查根据当前的设置, 是否满足自动创建 troposphere_mate.awslambda.Permission 的条件
+        """
+        self.lbd_func_aws_object_pre_check()
+        self.apigw_authorizer_aws_object_pre_check()
 
     @property
     def apigw_authorizer_lbd_permission_aws_object(self) -> awslambda.Permission:
@@ -420,6 +565,23 @@ class LbdFuncConfig(BaseConfig):
                 "{}.cron_job_expression".format(self.identifier)
             )
 
+    def scheduled_job_event_rule_aws_objects_pre_check(self):
+        """
+        **中文文档**
+
+        检查根据当前的设置, 是否满足自动创建 troposphere_mate.events.Rule 的条件
+
+        目前只支持 CUSTOM 的 Lambda Authorizer
+
+        - :attr:`LbdFuncConfig.scheduled_job_expression`: 必须为Python函数,
+            不然没有 Lambda Function 的支持, Event.Rule 就无意义.
+        - :attr:`LbdFuncConfig.scheduled_job_expression`: 必须被定义
+        - 必须满足所有创建 Lambda Function AWS Object 的条件
+        """
+        self.lbd_func_aws_object_pre_check()
+        if self.scheduled_job_expression is NOTHING:
+            raise ValueError("scheduled_job_expression is not defined yet!")
+
     @property
     def scheduled_job_event_rule_aws_objects(self) -> typing.Dict[str, events.Rule]:
         """
@@ -451,6 +613,10 @@ class LbdFuncConfig(BaseConfig):
             self._scheduled_job_event_rule_aws_objects_cache = dct
         return self._scheduled_job_event_rule_aws_objects_cache
 
+    def scheduled_job_event_lbd_permission_aws_objects_pre_check(self):
+        self.scheduled_job_event_rule_aws_objects_pre_check()
+        self.lbd_func_aws_object_pre_check()
+
     @property
     def scheduled_job_event_lbd_permission_aws_objects(self) -> typing.Dict[str, awslambda.Permission]:
         if self.scheduled_job_yes is not True:
@@ -478,43 +644,73 @@ class LbdFuncConfig(BaseConfig):
             self._scheduled_job_event_lbd_permission_aws_objects_cache = dct
         return self._scheduled_job_event_lbd_permission_aws_objects_cache
 
+    # @property
+    # def tp_lbd_environment(self) -> awslambda.Environment:
+    #     """
+    #
+    #     :return:
+    #     """
+    #     if self.environment_vars is NOTHING:
+    #         return self.environment_vars
+    #     elif isinstance(self.environment_vars, dict):
+    #         return awslambda.Environment(
+    #             Variables=self.environment_vars
+    #         )
+    #     elif isinstance(self.environment_vars, awslambda.Environment):
+    #         return self.environment_vars
+    #     else:
+    #         raise TypeError
 
-@property
-def tp_lbd_environment(self) -> awslambda.Environment:
-    """
+    def create_aws_resource(self, template):
+        self.create_lbd_func(template)
+        self.create_apigw_resource(template)
+        self.create_apigw_method(template)
+        self.create_apigw_authorizer(template)
+        self.create_scheduled_job_event(template)
 
-    :return:
-    """
-    if self.environment_vars is NOTHING:
-        return self.environment_vars
-    elif isinstance(self.environment_vars, dict):
-        return awslambda.Environment(
-            Variables=self.environment_vars
-        )
-    elif isinstance(self.environment_vars, awslambda.Environment):
-        return self.environment_vars
-    else:
-        raise TypeError
+    def create_lbd_func(self, template: Template):
+        try:
+            self.lbd_func_aws_object_pre_check()
+            template.add_parameter(self.lbd_func_aws_object, ignore_duplicate=True)
+        except:
+            pass
 
+    def create_apigw_resource(self, template: Template):
+        try:
+            self.apigw_resource_aws_object_pre_check()
+            template.add_parameter(self.apigw_resource_aws_object, ignore_duplicate=True)
+        except:
+            pass
 
-def create_aws_resource(self, template):
-    self.create_lbd_func(template)
-    self.create_apigw_resource(template)
+    def create_apigw_method(self, template: Template):
+        try:
+            self.apigw_method_aws_object_pre_check()
+            template.add_parameter(self.apigw_method_aws_object, ignore_duplicate=True)
 
+            self.apigw_method_lbd_permission_aws_object_pre_check()
+            template.add_parameter(self.apigw_method_lbd_permission_aws_object, ignore_duplicate=True)
+        except:
+            pass
 
-def create_lbd_func(self, template):
-    pass
+    def create_apigw_authorizer(self, template: Template):
+        try:
+            self.apigw_authorizer_aws_object_pre_check()
+            template.add_parameter(self.apigw_authorizer_aws_object, ignore_duplicate=True)
 
+            self.apigw_authorizer_lbd_permission_aws_object_pre_check()
+            template.add_parameter(self.apigw_authorizer_lbd_permission_aws_object, ignore_duplicate=True)
+        except:
+            pass
 
-def create_apigw_resource(self, template):
-    if self.apigw_resource_yes:
-        logic_id = ""
-        api_resource = apigateway.Resource(
-            logic_id,
-            ParentId="",
-            PathPart=self.apigw_resource_path_part,
-            RestApiId=Ref(self.apigw_restapi),
-        )
+    def create_scheduled_job_event(self, template: Template):
+        try:
+            self.scheduled_job_event_rule_aws_objects_pre_check()
+            template.add_parameter(self.scheduled_job_event_rule_aws_objects, ignore_duplicate=True)
+
+            self.scheduled_job_event_lbd_permission_aws_objects_pre_check()
+            template.add_parameter(self.scheduled_job_event_lbd_permission_aws_objects, ignore_duplicate=True)
+        except:
+            pass
 
 
 def lbd_func_config_value_handler(module_name: str,
@@ -541,28 +737,6 @@ def lbd_func_config_value_handler(module_name: str,
             py_handler_func_config._py_parent_module = py_parent_module
             py_handler_func_config._py_function = py_handler_func
 
-        # # apigw_resource_parent_id
-        # if not len(rel_module_name): # root module
-        #     apigw_resource_parent_id = GetAtt(current_module_config.apigw_restapi, "RootResourceId")
-        # else:
-        #     pass
-
-        # apigw_resource_path_part
-        # apigw_resource_path_part = slugify(py_current_module.__name__.split(".")[-1])
-        # if current_module_config.apigw_resource_path_part is NOTHING:
-        #     current_module_config.apigw_resource_path_part = apigw_resource_path_part
-
-        # if py_handler_func_config.apigw_reso
-        # urce_path_part is NOTHING:
-        #     py_handler_func_config.apigw_resource_path_part = apigw_resource_path_part
-        #
-        # if py_handler_func.__name__ == default_lbd_handler_name:
-        #     function_name = slugify(rel_module_name.replace(".", "-"))
-        # else:
-        #     function_name = slugify(rel_module_name.replace(".", "-") + "-" + py_handler_func.__name__)
-        # if py_handler_func_config.lbd_func_name is NOTHING:
-        #     py_handler_func_config.lbd_func_name = function_name
-
 
 def template_creation_handler(module_name: str,
                               config_field: str,
@@ -574,3 +748,7 @@ def template_creation_handler(module_name: str,
         # print(py_current_module.__name__)
         current_module_config = getattr(py_current_module, config_field)  # type: LbdFuncConfig
         current_module_config.create_aws_resource(template)
+
+        if py_handler_func is not None:
+            py_handler_func_config = getattr(py_handler_func, config_field)  # type: LbdFuncConfig
+            py_handler_func_config.create_aws_resource(template)

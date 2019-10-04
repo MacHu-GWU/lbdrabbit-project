@@ -1,0 +1,513 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "ApigwAuthorizerAuth": {
+            "DependsOn": [
+                "LbdFuncAuth",
+                "RestApi"
+            ],
+            "Properties": {
+                "AuthType": "custom",
+                "AuthorizerResultTtlInSeconds": 300,
+                "AuthorizerUri": {
+                    "Fn::Sub": [
+                        "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${AuthorizerFunctionArn}/invocations",
+                        {
+                            "AuthorizerFunctionArn": {
+                                "Fn::GetAtt": [
+                                    "LbdFuncAuth",
+                                    "Arn"
+                                ]
+                            },
+                            "Region": {
+                                "Ref": "AWS::Region"
+                            }
+                        }
+                    ]
+                },
+                "IdentitySource": "method.request.header.auth",
+                "Name": "ApigwAuthorizerAuth",
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "Type": "TOKEN"
+            },
+            "Type": "AWS::ApiGateway::Authorizer"
+        },
+        "ApigwMethodRestUsers": {
+            "DependsOn": [
+                "ApigwResourceRestUsers",
+                "LbdFuncRestUsers"
+            ],
+            "Properties": {
+                "AuthorizationType": "CUSTOM",
+                "AuthorizerId": {
+                    "Ref": "ApigwAuthorizerAuth"
+                },
+                "HttpMethod": "POST",
+                "Integration": {
+                    "IntegrationHttpMethod": "POST",
+                    "IntegrationResponses": [
+                        {
+                            "ContentHandling": "CONVERT_TO_TEXT",
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            },
+                            "StatusCode": "200"
+                        }
+                    ],
+                    "Type": "AWS",
+                    "Uri": {
+                        "Fn::Sub": [
+                            "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations",
+                            {
+                                "LambdaArn": {
+                                    "Fn::GetAtt": [
+                                        "LbdFuncRestUsers",
+                                        "Arn"
+                                    ]
+                                },
+                                "Region": {
+                                    "Ref": "AWS::Region"
+                                }
+                            }
+                        ]
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "StatusCode": "200"
+                    }
+                ],
+                "ResourceId": {
+                    "Ref": "ApigwResourceRestUsers"
+                },
+                "RestApiId": {
+                    "Ref": "RestApi"
+                }
+            },
+            "Type": "AWS::ApiGateway::Method"
+        },
+        "ApigwMethodRpcAddTwo": {
+            "DependsOn": [
+                "ApigwResourceRpcAddTwo",
+                "LbdFuncRpcAddTwo"
+            ],
+            "Properties": {
+                "AuthorizationType": "CUSTOM",
+                "AuthorizerId": {
+                    "Ref": "ApigwAuthorizerAuth"
+                },
+                "HttpMethod": "POST",
+                "Integration": {
+                    "IntegrationHttpMethod": "POST",
+                    "IntegrationResponses": [
+                        {
+                            "ContentHandling": "CONVERT_TO_TEXT",
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            },
+                            "StatusCode": "200"
+                        }
+                    ],
+                    "Type": "AWS",
+                    "Uri": {
+                        "Fn::Sub": [
+                            "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations",
+                            {
+                                "LambdaArn": {
+                                    "Fn::GetAtt": [
+                                        "LbdFuncRpcAddTwo",
+                                        "Arn"
+                                    ]
+                                },
+                                "Region": {
+                                    "Ref": "AWS::Region"
+                                }
+                            }
+                        ]
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "StatusCode": "200"
+                    }
+                ],
+                "ResourceId": {
+                    "Ref": "ApigwResourceRpcAddTwo"
+                },
+                "RestApiId": {
+                    "Ref": "RestApi"
+                }
+            },
+            "Type": "AWS::ApiGateway::Method"
+        },
+        "ApigwResourceRest": {
+            "DependsOn": [
+                "RestApi"
+            ],
+            "Properties": {
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "RestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "rest",
+                "RestApiId": {
+                    "Ref": "RestApi"
+                }
+            },
+            "Type": "AWS::ApiGateway::Resource"
+        },
+        "ApigwResourceRestUsers": {
+            "DependsOn": [
+                "RestApi"
+            ],
+            "Properties": {
+                "ParentId": {
+                    "Ref": "ApigwResourceRest"
+                },
+                "PathPart": "users",
+                "RestApiId": {
+                    "Ref": "RestApi"
+                }
+            },
+            "Type": "AWS::ApiGateway::Resource"
+        },
+        "ApigwResourceRpc": {
+            "DependsOn": [
+                "RestApi"
+            ],
+            "Properties": {
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "RestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "rpc",
+                "RestApiId": {
+                    "Ref": "RestApi"
+                }
+            },
+            "Type": "AWS::ApiGateway::Resource"
+        },
+        "ApigwResourceRpcAddTwo": {
+            "DependsOn": [
+                "RestApi"
+            ],
+            "Properties": {
+                "ParentId": {
+                    "Ref": "ApigwResourceRpc"
+                },
+                "PathPart": "add-two",
+                "RestApiId": {
+                    "Ref": "RestApi"
+                }
+            },
+            "Type": "AWS::ApiGateway::Resource"
+        },
+        "EnvironmentName": {
+            "Type": "String"
+        },
+        "LbdFuncAuth": {
+            "Properties": {
+                "Code": {
+                    "S3Bucket": "eq-sanhe-for-everything",
+                    "S3Key": "lambda/MacHu-GWU/lbdrabbit-project/0.0.1/source.zip"
+                },
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "${EnvironmentName}-<REQUIRED>",
+                        {
+                            "EnvironmentName": {
+                                "Ref": "EnvironmentName"
+                            }
+                        }
+                    ]
+                },
+                "Handler": "lbdrabbit.example.handlers.auth.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IamRoleForLbdFunc",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.6"
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "LbdFuncRestUsers": {
+            "Properties": {
+                "Code": {
+                    "S3Bucket": "eq-sanhe-for-everything",
+                    "S3Key": "lambda/MacHu-GWU/lbdrabbit-project/0.0.1/source.zip"
+                },
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "${EnvironmentName}-<REQUIRED>",
+                        {
+                            "EnvironmentName": {
+                                "Ref": "EnvironmentName"
+                            }
+                        }
+                    ]
+                },
+                "Handler": "lbdrabbit.example.handlers.rest.users.get",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IamRoleForLbdFunc",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.6",
+                "Timeout": 30
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "LbdFuncRpcAddTwo": {
+            "Properties": {
+                "Code": {
+                    "S3Bucket": "eq-sanhe-for-everything",
+                    "S3Key": "lambda/MacHu-GWU/lbdrabbit-project/0.0.1/source.zip"
+                },
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "${EnvironmentName}-<REQUIRED>",
+                        {
+                            "EnvironmentName": {
+                                "Ref": "EnvironmentName"
+                            }
+                        }
+                    ]
+                },
+                "Handler": "lbdrabbit.example.handlers.rpc.add_two.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IamRoleForLbdFunc",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.6"
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "LbdFuncSchedBackupDb": {
+            "Properties": {
+                "Code": {
+                    "S3Bucket": "eq-sanhe-for-everything",
+                    "S3Key": "lambda/MacHu-GWU/lbdrabbit-project/0.0.1/source.zip"
+                },
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "${EnvironmentName}-<REQUIRED>",
+                        {
+                            "EnvironmentName": {
+                                "Ref": "EnvironmentName"
+                            }
+                        }
+                    ]
+                },
+                "Handler": "lbdrabbit.example.handlers.sched.backup_db.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IamRoleForLbdFunc",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.6",
+                "Timeout": 30
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "LbdFuncSchedHeartBeap": {
+            "Properties": {
+                "Code": {
+                    "S3Bucket": "eq-sanhe-for-everything",
+                    "S3Key": "lambda/MacHu-GWU/lbdrabbit-project/0.0.1/source.zip"
+                },
+                "FunctionName": {
+                    "Fn::Sub": [
+                        "${EnvironmentName}-<REQUIRED>",
+                        {
+                            "EnvironmentName": {
+                                "Ref": "EnvironmentName"
+                            }
+                        }
+                    ]
+                },
+                "Handler": "lbdrabbit.example.handlers.sched.heart_beap.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IamRoleForLbdFunc",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.6",
+                "Timeout": 30
+            },
+            "Type": "AWS::Lambda::Function"
+        },
+        "LbdPermissionApigwAuthorizerAuth": {
+            "DependsOn": [
+                "ApigwAuthorizerAuth",
+                "LbdFuncAuth"
+            ],
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "LbdFuncAuth",
+                        "Arn"
+                    ]
+                },
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": [
+                        "arn:aws:execute-api:${Region}:${AccountId}:${RestApiId}/authorizers/${AuthorizerId}",
+                        {
+                            "AccountId": {
+                                "Ref": "AWS::AccountId"
+                            },
+                            "AuthorizerId": {
+                                "Ref": "ApigwAuthorizerAuth"
+                            },
+                            "Region": {
+                                "Ref": "AWS::Region"
+                            },
+                            "RestApiId": {
+                                "Ref": "RestApi"
+                            }
+                        }
+                    ]
+                }
+            },
+            "Type": "AWS::Lambda::Permission"
+        },
+        "LbdPermissionApigwMethodRestUsers": {
+            "DependsOn": [
+                "ApigwMethodRestUsers",
+                "LbdFuncRestUsers"
+            ],
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "LbdFuncRestUsers",
+                        "Arn"
+                    ]
+                },
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": [
+                        "arn:aws:execute-api:${Region}:${AccountId}:${RestApiId}/*/POST/rest/users",
+                        {
+                            "AccountId": {
+                                "Ref": "AWS::AccountId"
+                            },
+                            "Region": {
+                                "Ref": "AWS::Region"
+                            },
+                            "RestApiId": {
+                                "Ref": "RestApi"
+                            }
+                        }
+                    ]
+                }
+            },
+            "Type": "AWS::Lambda::Permission"
+        },
+        "LbdPermissionApigwMethodRpcAddTwo": {
+            "DependsOn": [
+                "ApigwMethodRpcAddTwo",
+                "LbdFuncRpcAddTwo"
+            ],
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "LbdFuncRpcAddTwo",
+                        "Arn"
+                    ]
+                },
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": [
+                        "arn:aws:execute-api:${Region}:${AccountId}:${RestApiId}/*/POST/rpc/add-two",
+                        {
+                            "AccountId": {
+                                "Ref": "AWS::AccountId"
+                            },
+                            "Region": {
+                                "Ref": "AWS::Region"
+                            },
+                            "RestApiId": {
+                                "Ref": "RestApi"
+                            }
+                        }
+                    ]
+                }
+            },
+            "Type": "AWS::Lambda::Permission"
+        }
+    },
+    "Resources": {
+        "IamRoleForLbdFunc": {
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": "sts:AssumeRole",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            }
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "RoleName": {
+                    "Fn::Sub": [
+                        "${EnvironmentName}-lbd-func",
+                        {
+                            "EnvironmentName": {
+                                "Ref": "EnvironmentName"
+                            }
+                        }
+                    ]
+                }
+            },
+            "Type": "AWS::IAM::Role"
+        },
+        "RestApi": {
+            "Properties": {
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Name": {
+                    "Fn::Sub": [
+                        "${EnvironmentName}-py",
+                        {
+                            "EnvironmentName": {
+                                "Ref": "EnvironmentName"
+                            }
+                        }
+                    ]
+                }
+            },
+            "Type": "AWS::ApiGateway::RestApi"
+        }
+    }
+}
