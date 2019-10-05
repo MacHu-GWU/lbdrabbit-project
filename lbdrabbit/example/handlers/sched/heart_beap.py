@@ -10,5 +10,5 @@ def handler(event, context):
 
 handler.__lbd_func_config__ = LbdFuncConfig()
 handler.__lbd_func_config__.scheduled_job_yes = True
-handler.__lbd_func_config__.scheduled_job_expression = "rate(1 minutes)"
+handler.__lbd_func_config__.scheduled_job_expression = "rate(1 minute)"
 
