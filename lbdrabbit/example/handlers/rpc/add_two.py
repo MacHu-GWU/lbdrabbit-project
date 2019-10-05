@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
 
+import json
+
+
 def handler(event, context):
-    return event["a"] + event["b"]
+    return {
+        "status_code": "200",
+        "body": json.dumps(event["a"] + event["b"])
+    }

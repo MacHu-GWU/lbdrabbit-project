@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import json
 from lbdrabbit.config_inherit import LbdFuncConfig
 
 __lbd_func_config__ = LbdFuncConfig(
@@ -14,11 +15,14 @@ users = {
 
 
 def get(event, context):
-    return list(users.values())
+    return {
+        "status_code": "200",
+        "body": json.dumps(list(users.values()))
+    }
 
 
 def post(event, context):
-    if event["user_id"] not in users:
-        users[event["user_id"]] = event
-    return "Failed! user_id = '{}' already exists.".format(event["user_id"])
-
+    return {
+        "status_code": "200",
+        "body": json.dumps({"post_data": event})
+    }
