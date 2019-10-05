@@ -54,6 +54,7 @@ lbd_func_config_value_handler(
 
 def test_rest():
     conf = access_lbd_config("lbdrabbit.example.handlers.rest")
+    assert conf.identifier == "lbdrabbit.example.handlers.rest.__lbd_func_config__"
 
     with raises(Exception):
         conf.lbd_func_aws_object_pre_check()
@@ -64,6 +65,8 @@ def test_rest():
         conf.apigw_method_lbd_permission_aws_object_pre_check()
     with raises(Exception):
         conf.apigw_authorizer_aws_object_pre_check()
+    with raises(Exception):
+        conf.apigw_method_options_for_cors_aws_object_pre_check()
     with raises(Exception):
         conf.scheduled_job_event_rule_aws_objects_pre_check()
     with raises(Exception):
@@ -82,6 +85,7 @@ def test_rest():
 
 def test_rest_users():
     conf = access_lbd_config("lbdrabbit.example.handlers.rest.users")
+    assert conf.identifier == "lbdrabbit.example.handlers.rest.users.__lbd_func_config__"
 
     with raises(Exception):
         conf.lbd_func_aws_object_pre_check()
@@ -90,6 +94,8 @@ def test_rest_users():
         conf.apigw_method_aws_object_pre_check()
     with raises(Exception):
         conf.apigw_method_lbd_permission_aws_object_pre_check()
+    with raises(Exception):
+        conf.apigw_method_options_for_cors_aws_object_pre_check()
     with raises(Exception):
         conf.apigw_authorizer_aws_object_pre_check()
     with raises(Exception):
@@ -109,12 +115,15 @@ def test_rest_users():
 
 def test_rest_users_get():
     conf = access_lbd_config("lbdrabbit.example.handlers.rest.users.get")
+    assert conf.identifier == "lbdrabbit.example.handlers.rest.users.get.__lbd_func_config__"
+    assert conf.lbd_func_logic_id == "LbdFuncRestUsersGet"
 
     conf.lbd_func_aws_object_pre_check()
     with raises(Exception):
         conf.apigw_resource_aws_object_pre_check()
     conf.apigw_method_aws_object_pre_check()
     conf.apigw_method_lbd_permission_aws_object_pre_check()
+    conf.apigw_method_options_for_cors_aws_object_pre_check()
     conf.apigw_authorizer_aws_object_pre_check()
     with raises(Exception):
         conf.scheduled_job_event_rule_aws_objects_pre_check()
@@ -124,14 +133,18 @@ def test_rest_users_get():
     assert conf.apigw_method_authorization_type == "CUSTOM"
 
 
+
 def test_rpc_add_two():
     conf = access_lbd_config("lbdrabbit.example.handlers.rpc.add_two.handler")
+    assert conf.identifier == "lbdrabbit.example.handlers.rpc.add_two.handler.__lbd_func_config__"
+    assert conf.lbd_func_logic_id == "LbdFuncRpcAddTwoHandler"
 
     conf.lbd_func_aws_object_pre_check()
     with raises(Exception):
         conf.apigw_resource_aws_object_pre_check()
     conf.apigw_method_aws_object_pre_check()
     conf.apigw_method_lbd_permission_aws_object_pre_check()
+    conf.apigw_method_options_for_cors_aws_object_pre_check()
     conf.apigw_authorizer_aws_object_pre_check()
     with raises(Exception):
         conf.scheduled_job_event_rule_aws_objects_pre_check()
@@ -141,11 +154,19 @@ def test_rpc_add_two():
     assert conf.apigw_method_authorization_type == "CUSTOM"
     assert conf.apigw_method_aws_object.Integration.Type == "AWS"
     assert conf.apigw_method_aws_object.Integration.IntegrationHttpMethod == "POST"
+    assert conf.apigw_method_options_for_cors_aws_object.HttpMethod == "OPTIONS"
+
+    assert ",auth" in conf.apigw_method_options_for_cors_aws_object \
+          .Integration \
+          .IntegrationResponses[0] \
+          .ResponseParameters["method.response.header.Access-Control-Allow-Headers"]
 
 
 def test_sched_heart_beap_hanlder():
     # Scheduled Job Event
     conf = access_lbd_config("lbdrabbit.example.handlers.sched.heart_beap.handler")
+    assert conf.identifier == "lbdrabbit.example.handlers.sched.heart_beap.handler.__lbd_func_config__"
+    assert conf.lbd_func_logic_id == "LbdFuncSchedHeartBeapHandler"
 
     conf.lbd_func_aws_object_pre_check()
     with raises(Exception):
@@ -156,15 +177,18 @@ def test_sched_heart_beap_hanlder():
     conf.scheduled_job_event_rule_aws_objects_pre_check()
     conf.scheduled_job_event_lbd_permission_aws_objects_pre_check()
 
-    assert conf.scheduled_job_expression_list == ["rate(1 minutes)", ]
+    assert conf.scheduled_job_expression_list == ["rate(1 minute)", ]
 
     assert isinstance(conf.lbd_func_aws_object, awslambda.Function)
-    assert isinstance(conf.scheduled_job_event_rule_aws_objects["rate(1 minutes)"], events.Rule)
-    assert isinstance(conf.scheduled_job_event_lbd_permission_aws_objects["rate(1 minutes)"], awslambda.Permission)
+    assert isinstance(conf.scheduled_job_event_rule_aws_objects["rate(1 minute)"], events.Rule)
+    assert isinstance(conf.scheduled_job_event_lbd_permission_aws_objects["rate(1 minute)"], awslambda.Permission)
 
 
 def test_sched_backup_db_handler():
     conf = access_lbd_config("lbdrabbit.example.handlers.sched.backup_db.handler")
+    assert conf.identifier == "lbdrabbit.example.handlers.sched.backup_db.handler.__lbd_func_config__"
+    assert conf.lbd_func_logic_id == "LbdFuncSchedBackupDbHandler"
+
     assert conf.scheduled_job_expression_list == ["cron(15 10 * * ? *)", ]
     assert isinstance(conf.lbd_func_aws_object, awslambda.Function)
     assert isinstance(conf.scheduled_job_event_rule_aws_objects["cron(15 10 * * ? *)"], events.Rule)
@@ -174,14 +198,19 @@ def test_sched_backup_db_handler():
 def test_auth_handler():
     # apigateway.Authorizer
     conf = access_lbd_config("lbdrabbit.example.handlers.auth.handler")
+    assert conf.identifier == "lbdrabbit.example.handlers.auth.handler.__lbd_func_config__"
+    assert conf.lbd_func_logic_id == "LbdFuncAuthHandler"
+
     assert isinstance(conf.apigw_authorizer_aws_object.RestApiId, Ref)
     assert len(conf.apigw_authorizer_aws_object.DependsOn) == 2
+    assert conf.apigw_authorizer_aws_object.IdentitySource == "method.request.header.auth"
 
     # apigateway.Method RPC style
     conf = access_lbd_config("lbdrabbit.example.handlers.rpc.add_two.handler")
 
     assert conf.apigw_method_aws_object.AuthorizationType == "CUSTOM"
     assert isinstance(conf.apigw_method_aws_object.AuthorizerId, Ref)
+
 
 
 if __name__ == "__main__":

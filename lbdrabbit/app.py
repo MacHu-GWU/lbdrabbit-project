@@ -53,6 +53,16 @@ class AppConfig(ConfigClass):
     The AWS profile name used for your local machine to deploy cloudformation. 
     """
 
+    LAMBDA_CODE_S3_KEY = Constant()
+    LAMBDA_CODE_S3_BUCKET = Constant()
+    LAMBDA_LAYER_ARN = Constant()
+
+    STACK_NAME = Derivable()
+
+    @STACK_NAME.getter
+    def get_STACK_NAME(self):
+        return self.ENVIRONMENT_NAME.get_value()
+
     # --- lbdrabbit framework related ---
     DEFAULT_LBD_FUNC_CONFIG_FIELD = Constant(default=DEFAULT_LBD_FUNC_CONFIG_FIELD)
     DEFAULT_LBD_HANDLER_FUNC_NAME = Constant(default=DEFAULT_LBD_HANDLER_FUNC_NAME)

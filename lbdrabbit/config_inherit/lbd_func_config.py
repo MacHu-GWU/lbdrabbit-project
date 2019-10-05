@@ -89,8 +89,15 @@ class LbdFuncConfig(BaseConfig):
     apigw_method_authorization_type = attr.ib(default=NOTHING)  # type: str
     apigw_method_authorizer = attr.ib(default=NOTHING)  # type: apigateway.Authorizer
 
+    apigw_method_enable_cors_yes = attr.ib(default=NOTHING)  # type: str
+    apigw_method_enable_cors_access_control_allow_origin = attr.ib(default=NOTHING)  # type: str
+    apigw_method_enable_cors_access_control_allow_headers = attr.ib(default=NOTHING)  # type: str
+    _apigw_method_options_for_cors_aws_object_cache = attr.ib(default=NOTHING)  # type: apigateway.Method
+
     apigw_authorizer_yes = attr.ib(default=NOTHING)  # type: bool
     apigw_authorizer_name = attr.ib(default=NOTHING)  # type: bool
+    apigw_authorizer_token_type_header_field = attr.ib(default=NOTHING)  # type: bool
+
     _apigw_authorizer_aws_object_cache = attr.ib(default=NOTHING)  # type: apigateway.Authorizer
     _apigw_authorizer_lbd_permission_aws_object_cache = attr.ib(default=NOTHING)  # type: awslambda.Permission
 
@@ -114,6 +121,7 @@ class LbdFuncConfig(BaseConfig):
         apigw_method_int_passthrough_behavior="WHEN_NO_MATCH",
         apigw_method_int_timeout_in_milli=29000,
         apigw_authorizer_yes=False,
+        apigw_authorizer_token_type_header_field="auth",
     )
 
     @property
@@ -168,7 +176,7 @@ class LbdFuncConfig(BaseConfig):
     @property
     def lbd_func_logic_id(self) -> str:
         return "LbdFunc{}".format(
-            camelcase(self.rel_module_name.replace(".", "-"))
+            camelcase(self.rel_module_name.replace(".", "-")) + camelcase(self._py_function.__name__)
         )
 
     @property
@@ -314,7 +322,7 @@ class LbdFuncConfig(BaseConfig):
     @property
     def apigw_method_logic_id(self) -> str:
         return "ApigwMethod{}".format(
-            camelcase(self.rel_module_name.replace(".", "-"))
+            camelcase(self.rel_module_name.replace(".", "-")) + camelcase(self._py_function.__name__)
         )
 
     def check_apigw_method_authorization_type(self):
@@ -331,6 +339,15 @@ class LbdFuncConfig(BaseConfig):
                 "{}.apigw_method_int_type can only be one of {}". \
                     format(self.identifier, ApiMethodIntType._valid_values)
             )
+
+    @property
+    def apigw_method_http_method(self):
+        if self.apigw_method_int_type == ApiMethodIntType.rest:
+            return self._py_function.__name__.upper()
+        elif self.apigw_method_int_type == ApiMethodIntType.rpc:
+            return "POST"
+        else:
+            return "POST"
 
     def apigw_method_aws_object_pre_check(self):
         """
@@ -356,6 +373,11 @@ class LbdFuncConfig(BaseConfig):
             return self._apigw_method_aws_object_cache
 
         if self._apigw_method_aws_object_cache is NOTHING:
+            depends_on = [
+                self.apigw_resource_aws_object,
+                self.lbd_func_aws_object,
+            ]
+
             integration = apigateway.Integration(
                 Type="AWS",
                 IntegrationHttpMethod="POST",
@@ -372,12 +394,39 @@ class LbdFuncConfig(BaseConfig):
                         ContentHandling="CONVERT_TO_TEXT",
                         ResponseTemplates={"application/json": ""}
                     )
-                ]
+                ],
+                RequestTemplates={"application/json": "$input.json('$')"},
             )
+
             if self.apigw_method_int_passthrough_behavior is not NOTHING:
                 integration.PassthroughBehavior = self.apigw_method_int_passthrough_behavior
             if self.apigw_method_int_timeout_in_milli is not NOTHING:
                 integration.TimeoutInMillis = self.apigw_method_int_timeout_in_milli
+
+            method_responses = [
+                apigateway.MethodResponse(
+                    StatusCode="200",
+                    ResponseModels={"application/json": "Empty"},
+                )
+            ]
+
+            if self.apigw_method_enable_cors_yes is True:
+                for integration_response in integration.IntegrationResponses:
+                    try:
+                        integration_response.ResponseParameters[
+                            "method.response.header.Access-Control-Allow-Origin"] = "'*'"
+                    except:
+                        integration_response.ResponseParameters = {
+                            "method.response.header.Access-Control-Allow-Origin": "'*'",
+                        }
+
+                for method_response in method_responses:
+                    try:
+                        method_response.ResponseParameters["method.response.header.Access-Control-Allow-Origin"] = False
+                    except:
+                        method_response.ResponseParameters = {
+                            "method.response.header.Access-Control-Allow-Origin": False,
+                        }
 
             self.check_apigw_method_authorization_type()
             self.check_apigw_method_int_type()
@@ -387,22 +436,16 @@ class LbdFuncConfig(BaseConfig):
                 RestApiId=Ref(self.apigw_restapi),
                 ResourceId=Ref(self.apigw_resource_aws_object),
                 AuthorizationType=self.apigw_method_authorization_type,
-                HttpMethod="POST",
-                MethodResponses=[
-                    apigateway.MethodResponse(
-                        StatusCode="200",
-                        ResponseModels={"application/json": "Empty"},
-                    )
-                ],
+                HttpMethod=self.apigw_method_http_method,
+                MethodResponses=method_responses,
                 Integration=integration,
-                DependsOn=[
-                    self.apigw_resource_aws_object,
-                    self.lbd_func_aws_object,
-                ]
             )
 
             if self.apigw_method_authorizer is not NOTHING:
                 apigw_method.AuthorizerId = Ref(self.apigw_method_authorizer)
+                depends_on.append(self.apigw_method_authorizer)
+
+            apigw_method.DependsOn = depends_on
 
             self._apigw_method_aws_object_cache = apigw_method
         return self._apigw_method_aws_object_cache
@@ -426,7 +469,7 @@ class LbdFuncConfig(BaseConfig):
                 SourceArn=Sub(
                     "arn:aws:execute-api:${Region}:${AccountId}:${RestApiId}/*/%s/%s" % \
                     (
-                        "POST",
+                        self.apigw_method_http_method,
                         self.apigw_resource_full_path
                     ),
                     {
@@ -442,6 +485,86 @@ class LbdFuncConfig(BaseConfig):
             )
             self._apigw_method_lbd_permission_aws_object_cache = apigw_method_lbd_permission
         return self._apigw_method_lbd_permission_aws_object_cache
+
+    def apigw_method_options_for_cors_aws_object_pre_check(self):
+        self.apigw_method_aws_object_pre_check()
+
+    @property
+    def apigw_method_options_for_cors_aws_object(self) -> apigateway.Method:
+        """
+
+        **中文文档**
+
+        为了开启 Cors, 对于 Api Resource 是需要一个 Options Method 专门用于获取
+        服务器的设置. 这事因为浏览器在检查到跨站请求时, 会使用 Options 方法获取服务器的
+        跨站访问设置, 如果不满则, 浏览爱则会返回错误信息.
+        """
+        if self.apigw_method_enable_cors_yes is not True:
+            return self._apigw_method_options_for_cors_aws_object_cache
+
+        # For cors, options method doesn't need a lambda function
+        depends_on = [
+            self.apigw_resource_aws_object,
+        ]
+
+        access_control_allow_headers = "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token"
+        if self.apigw_method_authorizer is not NOTHING:
+            if self.apigw_authorizer_token_type_header_field is not NOTHING:
+                access_control_allow_headers = access_control_allow_headers \
+                                               + ",{}".format(self.apigw_authorizer_token_type_header_field)
+
+        integration = apigateway.Integration(
+            Type="MOCK",
+            IntegrationResponses=[
+                apigateway.IntegrationResponse(
+                    StatusCode="200",
+                    ContentHandling="CONVERT_TO_TEXT",
+                    ResponseParameters={
+                        "method.response.header.Access-Control-Allow-Origin": "'*'",
+                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,POST'",
+                        "method.response.header.Access-Control-Allow-Headers": "'{}'".format(
+                            access_control_allow_headers),
+                    },
+                    ResponseTemplates={"application/json": ""}
+                )
+            ],
+            PassthroughBehavior="WHEN_NO_MATCH",
+        )
+        if self.apigw_method_int_passthrough_behavior is not NOTHING:
+            integration.PassthroughBehavior = self.apigw_method_int_passthrough_behavior
+        if self.apigw_method_int_timeout_in_milli is not NOTHING:
+            integration.TimeoutInMillis = self.apigw_method_int_timeout_in_milli
+
+        method_responses = [
+            apigateway.MethodResponse(
+                StatusCode="200",
+                ResponseModels={"application/json": "Empty"},
+                ResponseParameters={
+                    "method.response.header.Access-Control-Allow-Origin": False,
+                    "method.response.header.Access-Control-Allow-Methods": False,
+                    "method.response.header.Access-Control-Allow-Headers": False,
+                }
+            )
+        ]
+
+        self.check_apigw_method_authorization_type()
+        self.check_apigw_method_int_type()
+
+        apigw_method = apigateway.Method(
+            title="ApigwMethod{}Options".format(
+                camelcase(self.rel_module_name.replace(".", "-"))
+            ),
+            RestApiId=Ref(self.apigw_restapi),
+            ResourceId=Ref(self.apigw_resource_aws_object),
+            AuthorizationType="NONE",
+            HttpMethod="OPTIONS",
+            MethodResponses=method_responses,
+            Integration=integration,
+        )
+
+        apigw_method.DependsOn = depends_on
+
+        return apigw_method
 
     # apigateway.Authorizer
     @classmethod
@@ -484,6 +607,7 @@ class LbdFuncConfig(BaseConfig):
                 apigw_authorizer_name = self.apigw_authorizer_logic_id
             else:
                 apigw_authorizer_name = self.apigw_authorizer_name
+
             if len(set(apigw_authorizer_name).difference(set(string.ascii_letters + string.digits))):
                 raise ValueError(
                     "{}.apigw_authorizer_name can only have letter and digits".format(
@@ -496,7 +620,7 @@ class LbdFuncConfig(BaseConfig):
                 RestApiId=Ref(self.apigw_restapi),
                 AuthType="custom",
                 Type="TOKEN",
-                IdentitySource="method.request.header.auth",
+                IdentitySource="method.request.header.{}".format(self.apigw_authorizer_token_type_header_field),
                 AuthorizerResultTtlInSeconds=300,
                 AuthorizerUri=Sub(
                     "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${AuthorizerFunctionArn}/invocations",
@@ -594,7 +718,9 @@ class LbdFuncConfig(BaseConfig):
         if self._scheduled_job_event_rule_aws_objects_cache is NOTHING:
             dct = dict()
             for expression in self.scheduled_job_expression_list:
-                event_rule_logic_id = "EventRule{}".format(fingerprint.of_text(expression))
+                event_rule_logic_id = "EventRule{}".format(
+                    fingerprint.of_text(expression + self.lbd_func_name)
+                )
                 event_rule = events.Rule(
                     title=event_rule_logic_id,
                     State="ENABLED",
@@ -625,8 +751,8 @@ class LbdFuncConfig(BaseConfig):
         if self._scheduled_job_event_lbd_permission_aws_objects_cache is NOTHING:
             dct = dict()
             for expression in self.scheduled_job_expression_list:
-                event_rule_lambda_permission_logic_id = "EventRuleLbdPermission{}".format(
-                    fingerprint.of_text(expression)
+                event_rule_lambda_permission_logic_id = "LbdPermissionEventRule{}".format(
+                    fingerprint.of_text(expression + self.lbd_func_name)
                 )
                 event_rule = self.scheduled_job_event_rule_aws_objects[expression]
                 event_rule_lambda_permission = awslambda.Permission(
@@ -665,50 +791,61 @@ class LbdFuncConfig(BaseConfig):
         self.create_lbd_func(template)
         self.create_apigw_resource(template)
         self.create_apigw_method(template)
+        self.create_apigw_method_options_for_cors(template)
+
         self.create_apigw_authorizer(template)
         self.create_scheduled_job_event(template)
 
     def create_lbd_func(self, template: Template):
         try:
             self.lbd_func_aws_object_pre_check()
-            template.add_parameter(self.lbd_func_aws_object, ignore_duplicate=True)
+            template.add_resource(self.lbd_func_aws_object, ignore_duplicate=True)
         except:
             pass
 
     def create_apigw_resource(self, template: Template):
         try:
             self.apigw_resource_aws_object_pre_check()
-            template.add_parameter(self.apigw_resource_aws_object, ignore_duplicate=True)
+            template.add_resource(self.apigw_resource_aws_object, ignore_duplicate=True)
         except:
             pass
 
     def create_apigw_method(self, template: Template):
         try:
             self.apigw_method_aws_object_pre_check()
-            template.add_parameter(self.apigw_method_aws_object, ignore_duplicate=True)
+            template.add_resource(self.apigw_method_aws_object, ignore_duplicate=True)
 
             self.apigw_method_lbd_permission_aws_object_pre_check()
-            template.add_parameter(self.apigw_method_lbd_permission_aws_object, ignore_duplicate=True)
+            template.add_resource(self.apigw_method_lbd_permission_aws_object, ignore_duplicate=True)
+        except:
+            pass
+
+    def create_apigw_method_options_for_cors(self, template: Template):
+        try:
+            self.apigw_method_options_for_cors_aws_object_pre_check()
+            template.add_resource(self.apigw_method_options_for_cors_aws_object, ignore_duplicate=True)
         except:
             pass
 
     def create_apigw_authorizer(self, template: Template):
         try:
             self.apigw_authorizer_aws_object_pre_check()
-            template.add_parameter(self.apigw_authorizer_aws_object, ignore_duplicate=True)
+            template.add_resource(self.apigw_authorizer_aws_object, ignore_duplicate=True)
 
             self.apigw_authorizer_lbd_permission_aws_object_pre_check()
-            template.add_parameter(self.apigw_authorizer_lbd_permission_aws_object, ignore_duplicate=True)
+            template.add_resource(self.apigw_authorizer_lbd_permission_aws_object, ignore_duplicate=True)
         except:
             pass
 
     def create_scheduled_job_event(self, template: Template):
         try:
             self.scheduled_job_event_rule_aws_objects_pre_check()
-            template.add_parameter(self.scheduled_job_event_rule_aws_objects, ignore_duplicate=True)
+            for _, value in self.scheduled_job_event_rule_aws_objects.items():
+                template.add_resource(value, ignore_duplicate=True)
 
             self.scheduled_job_event_lbd_permission_aws_objects_pre_check()
-            template.add_parameter(self.scheduled_job_event_lbd_permission_aws_objects, ignore_duplicate=True)
+            for _, value in self.scheduled_job_event_lbd_permission_aws_objects.items():
+                template.add_resource(value, ignore_duplicate=True)
         except:
             pass
 
@@ -736,6 +873,10 @@ def lbd_func_config_value_handler(module_name: str,
             py_handler_func_config._py_module = py_current_module
             py_handler_func_config._py_parent_module = py_parent_module
             py_handler_func_config._py_function = py_handler_func
+            if py_handler_func_config.lbd_func_name is REQUIRED:
+                py_handler_func_config.lbd_func_name = \
+                    slugify(py_handler_func_config.rel_module_name.replace(".", "-")) + "-" + slugify(
+                        py_handler_func.__name__)
 
 
 def template_creation_handler(module_name: str,
@@ -745,7 +886,6 @@ def template_creation_handler(module_name: str,
                               template: Template):
     for py_current_module, py_parent_module, py_handler_func in walk_lbd_handler(
             module_name, valid_func_name_list):
-        # print(py_current_module.__name__)
         current_module_config = getattr(py_current_module, config_field)  # type: LbdFuncConfig
         current_module_config.create_aws_resource(template)
 
