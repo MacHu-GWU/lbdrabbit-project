@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import attr
-from lbdrabbit.config_inherit.base import BaseConfig, REQUIRED, NOTHING
+from lbdrabbit.lbd_func_config.base import BaseConfig, REQUIRED, NOTHING
 
 
 @attr.s
