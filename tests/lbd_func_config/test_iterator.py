@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-from lbdrabbit.config_inherit import iterator
+from lbdrabbit.lbd_func_config import iterator
 from lbdrabbit.const import VALID_LBD_HANDLER_FUNC_NAME_LIST
 
 

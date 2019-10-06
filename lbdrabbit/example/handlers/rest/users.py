@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import json
-from lbdrabbit.config_inherit import LbdFuncConfig
+from lbdrabbit import LbdFuncConfig
 
 __lbd_func_config__ = LbdFuncConfig(
     lbd_func_timeout=30,

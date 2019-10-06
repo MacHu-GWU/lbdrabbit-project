@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import datetime
-from lbdrabbit.config_inherit import LbdFuncConfig
+from lbdrabbit import LbdFuncConfig
 
 
 def handler(event, context):

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from lbdrabbit.config_inherit import LbdFuncConfig, ApiMethodIntType
+from lbdrabbit.lbd_func_config import LbdFuncConfig
 from lbdrabbit.example import cf
 from lbdrabbit.example.app_config_init import app_config
 

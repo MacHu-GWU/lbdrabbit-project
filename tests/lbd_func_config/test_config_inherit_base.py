@@ -3,7 +3,7 @@
 import pytest
 import attr
 from importlib import import_module
-from lbdrabbit.config_inherit.base import BaseConfig, REQUIRED, NOTHING, config_inherit_handler
+from lbdrabbit.lbd_func_config.base import BaseConfig, REQUIRED, NOTHING, config_inherit_handler
 from lbdrabbit.const import VALID_LBD_HANDLER_FUNC_NAME_LIST
 
 

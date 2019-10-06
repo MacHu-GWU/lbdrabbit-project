@@ -4,8 +4,8 @@ import pytest
 from pytest import raises, approx
 from importlib import import_module
 from lbdrabbit.const import VALID_LBD_HANDLER_FUNC_NAME_LIST, DEFAULT_LBD_HANDLER_FUNC_NAME
-from lbdrabbit.config_inherit.base import config_inherit_handler
-from lbdrabbit.config_inherit.lbd_func_config import (
+from lbdrabbit.lbd_func_config.base import config_inherit_handler
+from lbdrabbit.lbd_func_config.lbd_func_config import (
     LbdFuncConfig,
     DEFAULT_LBD_FUNC_CONFIG_FIELD,
     lbd_func_config_value_handler,
@@ -193,6 +193,11 @@ def test_sched_backup_db_handler():
     assert isinstance(conf.lbd_func_aws_object, awslambda.Function)
     assert isinstance(conf.scheduled_job_event_rule_aws_objects["cron(15 10 * * ? *)"], events.Rule)
     assert isinstance(conf.scheduled_job_event_lbd_permission_aws_objects["cron(15 10 * * ? *)"], awslambda.Permission)
+
+
+def test_view_index_handler():
+    conf = access_lbd_config("lbdrabbit.example.handlers.view.index.handler")
+    print(conf.apigw_method_aws_object)
 
 
 def test_auth_handler():

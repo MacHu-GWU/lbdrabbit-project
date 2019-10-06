@@ -5,6 +5,5 @@ from .iterator import walk_lbd_handler
 from .lbd_func_config import (
     LbdFuncConfig,
     DEFAULT_LBD_FUNC_CONFIG_FIELD,
-    ApiMethodIntType,
     lbd_func_config_value_handler,
 )

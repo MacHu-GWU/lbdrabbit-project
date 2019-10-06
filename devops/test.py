@@ -45,6 +45,8 @@ template.update_tags(dict(
 template.create_resource_type_label()
 template.to_file("master.json")
 
+print("We have {} resources in template".format(len(template.resources)))
+
 boto_ses = boto3.session.Session(profile_name=app_config.AWS_PROFILE_FOR_DEPLOY.get_value())
 
 template_url = upload_cf_template(
@@ -64,11 +66,11 @@ stack_parameters = [
     if cf_config_data.get(key) is not None
 ]
 
-# deploy_stack(
-#     boto_ses=boto_ses,
-#     stack_name=app_config.STACK_NAME.get_value(),
-#     template_url=template_url,
-#     stack_tags=[],
-#     stack_parameters=stack_parameters,
-#     # execution_role_arn,
-# )
+deploy_stack(
+    boto_ses=boto_ses,
+    stack_name=app_config.STACK_NAME.get_value(),
+    template_url=template_url,
+    stack_tags=[],
+    stack_parameters=stack_parameters,
+    # execution_role_arn,
+)

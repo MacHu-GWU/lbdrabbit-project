@@ -55,6 +55,24 @@ Welcome to ``lbdrabbit`` Documentation
 Documentation for ``lbdrabbit``.
 
 
+**设计思路**
+
+Lambda Function 是 Serverless Architect 中的核心部件. 而架构中常用的中间件有:
+
+- Api Gateway, 用于向外部提供调用接口.
+- SQS, Kinesis Stream, DynamoDB Stream, 通过流中间件触发 Lambda Function
+- Event Rule, 根据 Cron Job 的规则, 定时触发 Lambda.
+- S3 Put Object Event, 由存储桶中的数据更新的事件触发.
+
+那么我就会开始想, 能不能开发一个框架, 让我们专注于 Lambda Function 的核心处理逻辑实现, 以及事件驱动的规则定义, 然后自动的生成那些与部署相关的代码呢?
+
+在对开源社区进行了一番调查之后发现, 目前已有 Serverless Framework 和 AWS Sam 两个框架. 这两个框架都可以简化 Lambda Function 的部署, 但是需要用户自行维护除 AWS Lambda 以外的模块的部署, 例如 API Gateway, S3, SQS, Kinesis, DynamoDB Stream. 另一个问题是, 他们都使用了 YML 格式的配置文件, 但是当 Lambda Function 数量很多时, 仍然需要手动的一个一个指定每个 Lambda Function 的具体配置.
+
+于是, 我萌生了一个想法, 能不能 Lambda Function 的配置 像 Python 中的 类继承 一样简单和灵活呢? 能不能由 Lambda Function 的配置, 自动推导出其他系统的配置, 并自动帮我们部署这些系统呢?
+
+这就是 lbdrabbit 诞生的原因.
+
+
 .. _install:
 
 Install

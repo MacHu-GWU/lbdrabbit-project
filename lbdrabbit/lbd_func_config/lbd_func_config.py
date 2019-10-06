@@ -5,27 +5,15 @@ import attr
 import string
 from importlib import import_module
 from picage import Package
-from troposphere_mate import Template, Parameter, Tags, Ref, GetAtt, Sub
-from troposphere_mate import awslambda, apigateway, iam, events
+from constant2 import Constant
+from troposphere_mate import Template, Parameter, Tags, Ref, GetAtt, Sub, ImportValue
+from troposphere_mate import awslambda, apigateway, iam, events, s3
 from troposphere_mate import slugify, camelcase, helper_fn_sub
 
 from .base import BaseConfig, REQUIRED, NOTHING, walk_lbd_handler
 from ..pkg.fingerprint import fingerprint
 
 DEFAULT_LBD_FUNC_CONFIG_FIELD = "__lbd_func_config__"
-
-
-class ApiMethodIntType:
-    rest = "rest"
-    rpc = "rpc"
-    html = "html"
-
-    _valid_values = set()
-
-
-for k, v in ApiMethodIntType.__dict__.items():
-    if not k.startswith("_"):
-        ApiMethodIntType._valid_values.add(v)
 
 
 @attr.s
@@ -79,6 +67,18 @@ class LbdFuncConfig(BaseConfig):
     apigw_restapi = attr.ib(default=NOTHING)  # type: apigateway.RestApi
     _apigw_resource_aws_object_cache = attr.ib(default=NOTHING)  # type: apigateway.Resource
 
+    # apigateway.Method related
+    class ApiMethodIntType(Constant):
+        rest = "rest"
+        rpc = "rpc"
+        html = "html"
+
+    class ApigwMethodAuthorizationType(Constant):
+        none = "NONE"
+        aws_iam = "AWS_IAM"
+        custom = "CUSTOM"
+        cognito_user_pools = "COGNITO_USER_POOLS"
+
     apigw_method_yes = attr.ib(default=NOTHING)  # type: bool
     apigw_method_int_type = attr.ib(default=NOTHING)  # type: str
     _apigw_method_aws_object_cache = attr.ib(default=NOTHING)  # type: apigateway.Method
@@ -87,7 +87,8 @@ class LbdFuncConfig(BaseConfig):
     apigw_method_int_passthrough_behavior = attr.ib(default=NOTHING)  # type: str
     apigw_method_int_timeout_in_milli = attr.ib(default=NOTHING)  # type: int
     apigw_method_authorization_type = attr.ib(default=NOTHING)  # type: str
-    apigw_method_authorizer = attr.ib(default=NOTHING)  # type: apigateway.Authorizer
+    apigw_method_authorizer = attr.ib(
+        default=NOTHING)  # type: typing.Union[apigateway.Authorizer, Ref, GetAtt, ImportValue, Parameter, str]
 
     apigw_method_enable_cors_yes = attr.ib(default=NOTHING)  # type: str
     apigw_method_enable_cors_access_control_allow_origin = attr.ib(default=NOTHING)  # type: str
@@ -107,6 +108,60 @@ class LbdFuncConfig(BaseConfig):
     _scheduled_job_event_lbd_permission_aws_objects_cache = attr.ib(
         default=NOTHING)  # type: typing.Dict[str, awslambda.Permission]
 
+    # S3 Event Trigger
+
+    @attr.s
+    class S3EventLambdaConfig(object):
+        event = attr.ib(default=NOTHING)
+        filter = attr.ib(default=NOTHING)
+
+        class EventEnum(Constant):
+            created = "s3:ObjectCreated:*"
+            created_put = "s3:ObjectCreated:Put"
+            created_post = "s3:ObjectCreated:Post"
+            created_copy = "s3:ObjectCreated:Copy"
+            created_multipart_upload = "s3:ObjectCreated:CompleteMultipartUpload"
+
+            removed = "s3:ObjectRemoved:*"
+            removed_delete = "s3:ObjectRemoved:Delete"
+            removed_delete_marker_created = "s3:ObjectRemoved:DeleteMarkerCreated"
+
+            restore = "s3:ObjectRestore:Post"
+            restore_completed = "s3:ObjectRestore:Completed"
+
+            reduced_redundancy_lost_object = "s3:ReducedRedundancyLostObject"
+
+    s3_event_lbd_config_list = attr.ib(default=NOTHING)  # type: typing.List[LbdFuncConfig.S3EventLambdaConfig]
+
+    @property
+    def s3_notification_configuration_aws_property(self):
+        s3_notification_configuration = s3.NotificationConfiguration()
+        if self.s3_event_lbd_config_list is not NOTHING:
+            if isinstance(self.s3_event_lbd_config_list, list):
+                s3_notification_configuration.LambdaConfigurations = [
+                    s3.LambdaConfigurations(
+                        Event=s3_event_lbd_config.event,
+                        Function=GetAtt(self.lbd_func_aws_object, "Arn"),
+                        Filter=s3_event_lbd_config.filter,
+                    )
+                    for s3_event_lbd_config in self.s3_event_lbd_config_list
+                ]
+
+        return s3_notification_configuration
+
+    _s3_event_bucket_aws_object_cache = attr.ib(default=NOTHING)  # type: s3.Bucket
+
+    @property
+    def s3_event_bucket_aws_object(self) -> s3.Bucket:
+        if self._s3_event_bucket_aws_object_cache is NOTHING:
+            s3_bucket_logic_id = ""
+            s3_bucket = s3.Bucket(
+
+            )
+            self._s3_event_bucket_aws_object_cache = s3_bucket
+        return self._s3_event_bucket_aws_object_cache
+
+    #
     _root_module_name = attr.ib(default=NOTHING)
     _py_module = attr.ib(default=NOTHING)
     _py_function = attr.ib(default=NOTHING)
@@ -334,20 +389,59 @@ class LbdFuncConfig(BaseConfig):
             )
 
     def check_apigw_method_int_type(self):
-        if self.apigw_method_int_type not in ApiMethodIntType._valid_values:
+        if self.apigw_method_int_type not in self.ApiMethodIntType.Values():
             raise ValueError(
                 "{}.apigw_method_int_type can only be one of {}". \
-                    format(self.identifier, ApiMethodIntType._valid_values)
+                    format(self.identifier, self.ApiMethodIntType.Values())
             )
 
     @property
     def apigw_method_http_method(self):
-        if self.apigw_method_int_type == ApiMethodIntType.rest:
+        if self.apigw_method_int_type == self.ApiMethodIntType.rest:
             return self._py_function.__name__.upper()
-        elif self.apigw_method_int_type == ApiMethodIntType.rpc:
+        elif self.apigw_method_int_type == self.ApiMethodIntType.rpc:
             return "POST"
+        elif self.apigw_method_int_type == self.ApiMethodIntType.html:
+            return "GET"
         else:
             return "POST"
+
+    @property
+    def apigw_method_use_authorizer_yes(self):
+        """
+        Test if this Api Method need an Authorizer.
+
+        :rtype: bool
+        """
+        if isinstance(self.apigw_method_authorization_type, str):
+            if self.apigw_method_authorization_type.upper() == self.ApigwMethodAuthorizationType.none:
+                return False
+            if self.apigw_method_authorization_type.upper() in self.ApigwMethodAuthorizationType.Values():
+                return True
+        return False
+
+    @property
+    def apigw_method_authorizer_id_for_cf(self):
+        """
+        Resolve the value that will be assigned to ``apigateway.Method.AuthorizerId``
+        property.
+        """
+        if self.apigw_method_authorizer is NOTHING:
+            raise TypeError
+        if isinstance(self.apigw_method_authorizer, (apigateway.Authorizer, Parameter)):
+            return Ref(self.apigw_method_authorizer)
+        elif isinstance(self.apigw_method_authorizer, (Ref, GetAtt, ImportValue)):
+            return self.apigw_method_authorizer
+        elif isinstance(self.apigw_method_authorizer, str):
+            # hard coded authorizer id (from console)
+            if len(self.apigw_method_authorizer) \
+                    and len(set(self.apigw_method_authorizer) \
+                                    .difference(set(string.ascii_lowercase + string.digits))):
+                return self.apigw_method_authorizer
+            # hard coded apigateway.Authorizer logic id
+            else:
+                return Ref(self.apigw_method_authorizer)
+        return
 
     def apigw_method_aws_object_pre_check(self):
         """
@@ -378,6 +472,52 @@ class LbdFuncConfig(BaseConfig):
                 self.lbd_func_aws_object,
             ]
 
+            # Integration Request
+            request_template = {"application/json": "$input.json('$')"}
+
+            # Integration Response
+            if self.apigw_method_int_type == self.ApiMethodIntType.html:
+                integration_response_200 = apigateway.IntegrationResponse(
+                    StatusCode="200",
+                    ResponseParameters={"method.response.header.Content-Type": "'text/html'"},
+                    ResponseTemplates={"text/html": "$input.path('$')"},
+                )
+                method_response_200 = apigateway.MethodResponse(
+                    StatusCode="200",
+                    ResponseParameters={"method.response.header.Content-Type": False},
+                    ResponseModels={"application/json": "Empty"},
+                )
+            elif self.apigw_method_int_type == self.ApiMethodIntType.rpc:
+                integration_response_200 = apigateway.IntegrationResponse(
+                    StatusCode="200",
+                    ContentHandling="CONVERT_TO_TEXT",
+                    ResponseParameters={},
+                    ResponseTemplates={"application/json": ""}
+                )
+                method_response_200 = apigateway.MethodResponse(
+                    StatusCode="200",
+                    ResponseParameters={},
+                    ResponseModels={"application/json": "Empty"},
+                )
+            elif self.apigw_method_int_type == self.ApiMethodIntType.rest:
+                integration_response_200 = apigateway.IntegrationResponse(
+                    StatusCode="200",
+                    ContentHandling="CONVERT_TO_TEXT",
+                    ResponseParameters={},
+                    ResponseTemplates={"application/json": ""}
+                )
+                method_response_200 = apigateway.MethodResponse(
+                    StatusCode="200",
+                    ResponseParameters={},
+                    ResponseModels={"application/json": "Empty"},
+                )
+            else:
+                raise TypeError
+
+            integration_responses = [
+                integration_response_200,
+            ]
+
             integration = apigateway.Integration(
                 Type="AWS",
                 IntegrationHttpMethod="POST",
@@ -388,14 +528,8 @@ class LbdFuncConfig(BaseConfig):
                         "LambdaArn": GetAtt(self.lbd_func_aws_object, "Arn"),
                     }
                 ),
-                IntegrationResponses=[
-                    apigateway.IntegrationResponse(
-                        StatusCode="200",
-                        ContentHandling="CONVERT_TO_TEXT",
-                        ResponseTemplates={"application/json": ""}
-                    )
-                ],
-                RequestTemplates={"application/json": "$input.json('$')"},
+                RequestTemplates=request_template,
+                IntegrationResponses=integration_responses,
             )
 
             if self.apigw_method_int_passthrough_behavior is not NOTHING:
@@ -403,30 +537,18 @@ class LbdFuncConfig(BaseConfig):
             if self.apigw_method_int_timeout_in_milli is not NOTHING:
                 integration.TimeoutInMillis = self.apigw_method_int_timeout_in_milli
 
+            # Method Response
             method_responses = [
-                apigateway.MethodResponse(
-                    StatusCode="200",
-                    ResponseModels={"application/json": "Empty"},
-                )
+                method_response_200,
             ]
 
             if self.apigw_method_enable_cors_yes is True:
                 for integration_response in integration.IntegrationResponses:
-                    try:
-                        integration_response.ResponseParameters[
-                            "method.response.header.Access-Control-Allow-Origin"] = "'*'"
-                    except:
-                        integration_response.ResponseParameters = {
-                            "method.response.header.Access-Control-Allow-Origin": "'*'",
-                        }
+                    integration_response.ResponseParameters[
+                        "method.response.header.Access-Control-Allow-Origin"] = "'*'"
 
                 for method_response in method_responses:
-                    try:
-                        method_response.ResponseParameters["method.response.header.Access-Control-Allow-Origin"] = False
-                    except:
-                        method_response.ResponseParameters = {
-                            "method.response.header.Access-Control-Allow-Origin": False,
-                        }
+                    method_response.ResponseParameters["method.response.header.Access-Control-Allow-Origin"] = False
 
             self.check_apigw_method_authorization_type()
             self.check_apigw_method_int_type()
@@ -441,13 +563,14 @@ class LbdFuncConfig(BaseConfig):
                 Integration=integration,
             )
 
-            if self.apigw_method_authorizer is not NOTHING:
+            if self.apigw_method_authorizer not in [NOTHING, None, "none", "None"]:
                 apigw_method.AuthorizerId = Ref(self.apigw_method_authorizer)
                 depends_on.append(self.apigw_method_authorizer)
 
             apigw_method.DependsOn = depends_on
 
             self._apigw_method_aws_object_cache = apigw_method
+
         return self._apigw_method_aws_object_cache
 
     def apigw_method_lbd_permission_aws_object_pre_check(self):
@@ -507,25 +630,33 @@ class LbdFuncConfig(BaseConfig):
             self.apigw_resource_aws_object,
         ]
 
+        # Integration Request
+        request_template = {"application/json": "{\"statusCode\": 200}"}
+
+        # Integration Response
         access_control_allow_headers = "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token"
+
         if self.apigw_method_authorizer is not NOTHING:
             if self.apigw_authorizer_token_type_header_field is not NOTHING:
                 access_control_allow_headers = access_control_allow_headers \
                                                + ",{}".format(self.apigw_authorizer_token_type_header_field)
 
+        response_parameters = {
+            "method.response.header.Access-Control-Allow-Origin": "'*'",
+            "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,POST'",
+            "method.response.header.Access-Control-Allow-Headers": "'{}'".format(
+                access_control_allow_headers),
+        }
+        response_templates = {"application/json": ""}
         integration = apigateway.Integration(
             Type="MOCK",
+            RequestTemplates=request_template,
             IntegrationResponses=[
                 apigateway.IntegrationResponse(
                     StatusCode="200",
                     ContentHandling="CONVERT_TO_TEXT",
-                    ResponseParameters={
-                        "method.response.header.Access-Control-Allow-Origin": "'*'",
-                        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,POST'",
-                        "method.response.header.Access-Control-Allow-Headers": "'{}'".format(
-                            access_control_allow_headers),
-                    },
-                    ResponseTemplates={"application/json": ""}
+                    ResponseParameters=response_parameters,
+                    ResponseTemplates=response_templates,
                 )
             ],
             PassthroughBehavior="WHEN_NO_MATCH",
@@ -535,6 +666,7 @@ class LbdFuncConfig(BaseConfig):
         if self.apigw_method_int_timeout_in_milli is not NOTHING:
             integration.TimeoutInMillis = self.apigw_method_int_timeout_in_milli
 
+        # Method Response
         method_responses = [
             apigateway.MethodResponse(
                 StatusCode="200",

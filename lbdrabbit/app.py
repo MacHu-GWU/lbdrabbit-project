@@ -2,7 +2,7 @@
 
 from picage import Package
 from configirl import Constant, Derivable, ConfigClass
-from .config_inherit import (
+from .lbd_func_config import (
     walk_lbd_handler,
     config_inherit_handler,
     DEFAULT_LBD_FUNC_CONFIG_FIELD, LbdFuncConfig, lbd_func_config_value_handler

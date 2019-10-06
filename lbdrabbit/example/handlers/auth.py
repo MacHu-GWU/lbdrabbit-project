@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import re
-from lbdrabbit.config_inherit import LbdFuncConfig, ApiMethodIntType
+from lbdrabbit import LbdFuncConfig
 
 __lbd_func_config__ = LbdFuncConfig()
 __lbd_func_config__.apigw_resource_yes = False

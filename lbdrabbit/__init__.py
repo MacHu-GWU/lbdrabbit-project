@@ -16,7 +16,7 @@ __github_username__ = "MacHu-GWU"
 
 try:
     from .app import AppConfig, App, Constant, Derivable
-    from .config_inherit import (
+    from .lbd_func_config import (
         LbdFuncConfig, DEFAULT_LBD_FUNC_CONFIG_FIELD,
         ApiMethodIntType,
     )
