@@ -133,7 +133,6 @@ def test_rest_users_get():
     assert conf.apigw_method_authorization_type == "CUSTOM"
 
 
-
 def test_rpc_add_two():
     conf = access_lbd_config("lbdrabbit.example.handlers.rpc.add_two.handler")
     assert conf.identifier == "lbdrabbit.example.handlers.rpc.add_two.handler.__lbd_func_config__"
@@ -157,9 +156,9 @@ def test_rpc_add_two():
     assert conf.apigw_method_options_for_cors_aws_object.HttpMethod == "OPTIONS"
 
     assert ",auth" in conf.apigw_method_options_for_cors_aws_object \
-          .Integration \
-          .IntegrationResponses[0] \
-          .ResponseParameters["method.response.header.Access-Control-Allow-Headers"]
+        .Integration \
+        .IntegrationResponses[0] \
+        .ResponseParameters["method.response.header.Access-Control-Allow-Headers"]
 
 
 def test_sched_heart_beap_hanlder():
@@ -197,7 +196,6 @@ def test_sched_backup_db_handler():
 
 def test_view_index_handler():
     conf = access_lbd_config("lbdrabbit.example.handlers.view.index.handler")
-    print(conf.apigw_method_aws_object)
 
 
 def test_auth_handler():
@@ -215,7 +213,6 @@ def test_auth_handler():
 
     assert conf.apigw_method_aws_object.AuthorizationType == "CUSTOM"
     assert isinstance(conf.apigw_method_aws_object.AuthorizerId, Ref)
-
 
 
 if __name__ == "__main__":

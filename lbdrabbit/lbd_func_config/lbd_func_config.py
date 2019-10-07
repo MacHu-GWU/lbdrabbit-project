@@ -137,8 +137,11 @@ class LbdFuncConfig(BaseConfig):
 
         :rtype: bool
         """
-        if getattr(self, "{}_yes".format(res_name)) is not True:
-            return False
+        try:
+            if getattr(self, "{}_yes".format(res_name)) is not True:
+                return False
+        except:
+            pass
         try:
             getattr(self, "{}_aws_object_pre_check".format(res_name))()
             return True
@@ -368,14 +371,22 @@ class LbdFuncConfig(BaseConfig):
                 self._py_function.__name__
             except AttributeError:
                 raise TypeError("{}.{} is not a valid function".format(self._py_module.__name__, self._py_function))
+            if self.lbd_func_code is NOTHING:
+                raise ValueError(
+                    "{}.lbd_func_code is not valid!".format(self.identifier)
+                )
+            if self.lbd_func_runtime is NOTHING:
+                raise ValueError(
+                    "{}.lbd_func_runtime is not valid!".format(self.identifier)
+                )
         else:
             raise TypeError("{}.{} is not a valid function".format(self._py_module.__name__, self._py_function))
 
+    def lbd_func_aws_object_ready(self):
+        return self._ready_checker_shortener("lbd_func")
+
     @property
     def lbd_func_aws_object(self) -> awslambda.Function:
-        if self.lbd_func_yes is not True:
-            return self._lbd_func_aws_object_cache
-
         if self._lbd_func_aws_object_cache is NOTHING:
             lbd_func = awslambda.Function(
                 self.lbd_func_logic_id,
@@ -465,6 +476,9 @@ class LbdFuncConfig(BaseConfig):
         if self.apigw_restapi is NOTHING:
             raise ValueError("to create a apigateway.Resource, "
                              "LbdFuncConfig.apigw_restapi has to be specified")
+
+    def apigw_resource_aws_object_ready(self):
+        return self._ready_checker_shortener("apigw_resource")
 
     @property
     def apigw_resource_aws_object(self) -> apigateway.Resource:
@@ -570,11 +584,11 @@ class LbdFuncConfig(BaseConfig):
             raise ValueError("to create a apigateway.Resource, "
                              "LbdFuncConfig.apigw_restapi has to be specified")
 
+    def apigw_method_aws_object_ready(self):
+        return self._ready_checker_shortener("apigw_method")
+
     @property
     def apigw_method_aws_object(self) -> apigateway.Method:
-        if self.apigw_method_yes is not True:
-            return self._apigw_method_aws_object_cache
-
         if self._apigw_method_aws_object_cache is NOTHING:
             depends_on = [
                 self.apigw_resource_aws_object,
@@ -686,11 +700,11 @@ class LbdFuncConfig(BaseConfig):
         self.apigw_method_aws_object_pre_check()
         self.lbd_func_aws_object_pre_check()
 
+    def apigw_method_lbd_permission_aws_object_ready(self):
+        return self._ready_checker_shortener("apigw_method_lbd_permission")
+
     @property
     def apigw_method_lbd_permission_aws_object(self) -> awslambda.Permission:
-        if self.apigw_method_yes is not True:
-            return self._apigw_method_lbd_permission_aws_object_cache
-
         if self._apigw_method_lbd_permission_aws_object_cache is NOTHING:
             apigw_method_lbd_permission_logic_id = "LbdPermission{}".format(self.apigw_method_logic_id)
             apigw_method_lbd_permission = awslambda.Permission(
@@ -721,6 +735,9 @@ class LbdFuncConfig(BaseConfig):
     def apigw_method_options_for_cors_aws_object_pre_check(self):
         self.apigw_method_aws_object_pre_check()
 
+    def apigw_method_options_for_cors_aws_object_ready(self):
+        return self._ready_checker_shortener("apigw_method_options_for_cors")
+
     @property
     def apigw_method_options_for_cors_aws_object(self) -> apigateway.Method:
         """
@@ -731,9 +748,6 @@ class LbdFuncConfig(BaseConfig):
         服务器的设置. 这事因为浏览器在检查到跨站请求时, 会使用 Options 方法获取服务器的
         跨站访问设置, 如果不满则, 浏览爱则会返回错误信息.
         """
-        if self.apigw_method_enable_cors_yes is not True:
-            return self._apigw_method_options_for_cors_aws_object_cache
-
         # For cors, options method doesn't need a lambda function
         depends_on = [
             self.apigw_resource_aws_object,
@@ -887,11 +901,11 @@ class LbdFuncConfig(BaseConfig):
         self.lbd_func_aws_object_pre_check()
         self.apigw_authorizer_aws_object_pre_check()
 
+    def apigw_authorizer_lbd_permission_aws_object_ready(self):
+        return self._ready_checker_shortener("apigw_authorizer_lbd_permission")
+
     @property
     def apigw_authorizer_lbd_permission_aws_object(self) -> awslambda.Permission:
-        if self.apigw_authorizer_yes is not True:
-            return self._apigw_authorizer_lbd_permission_aws_object_cache
-
         if self._apigw_authorizer_lbd_permission_aws_object_cache is NOTHING:
             apigw_authorizer_lbd_permission_logic_id = "LbdPermission{}".format(self.apigw_authorizer_logic_id)
             apigw_authorizer_lbd_permission = awslambda.Permission(
@@ -947,15 +961,15 @@ class LbdFuncConfig(BaseConfig):
         if self.scheduled_job_expression is NOTHING:
             raise ValueError("scheduled_job_expression is not defined yet!")
 
+    def scheduled_job_event_rule_aws_objects_ready(self):
+        return self._ready_checker_shortener("scheduled_job_event_rule")
+
     @property
     def scheduled_job_event_rule_aws_objects(self) -> typing.Dict[str, events.Rule]:
         """
         Returns a key value pair of scheduled job expression and
         ``troposphere_mate.events.Rule`` object. Since
         """
-        if self.scheduled_job_yes is not True:
-            return self._scheduled_job_event_rule_aws_objects_cache
-
         if self._scheduled_job_event_rule_aws_objects_cache is NOTHING:
             dct = dict()
             for expression in self.scheduled_job_expression_list:
@@ -984,11 +998,11 @@ class LbdFuncConfig(BaseConfig):
         self.scheduled_job_event_rule_aws_objects_pre_check()
         self.lbd_func_aws_object_pre_check()
 
+    def scheduled_job_event_lbd_permission_aws_objects_ready(self):
+        return self._ready_checker_shortener("scheduled_job_event_lbd_permission")
+
     @property
     def scheduled_job_event_lbd_permission_aws_objects(self) -> typing.Dict[str, awslambda.Permission]:
-        if self.scheduled_job_yes is not True:
-            return self._scheduled_job_event_lbd_permission_aws_objects_cache
-
         if self._scheduled_job_event_lbd_permission_aws_objects_cache is NOTHING:
             dct = dict()
             for expression in self.scheduled_job_expression_list:
@@ -1011,84 +1025,49 @@ class LbdFuncConfig(BaseConfig):
             self._scheduled_job_event_lbd_permission_aws_objects_cache = dct
         return self._scheduled_job_event_lbd_permission_aws_objects_cache
 
-    # @property
-    # def tp_lbd_environment(self) -> awslambda.Environment:
-    #     """
-    #
-    #     :return:
-    #     """
-    #     if self.environment_vars is NOTHING:
-    #         return self.environment_vars
-    #     elif isinstance(self.environment_vars, dict):
-    #         return awslambda.Environment(
-    #             Variables=self.environment_vars
-    #         )
-    #     elif isinstance(self.environment_vars, awslambda.Environment):
-    #         return self.environment_vars
-    #     else:
-    #         raise TypeError
-
     def create_aws_resource(self, template):
         self.create_lbd_func(template)
         self.create_apigw_resource(template)
         self.create_apigw_method(template)
         self.create_apigw_method_options_for_cors(template)
-
         self.create_apigw_authorizer(template)
         self.create_scheduled_job_event(template)
 
     def create_lbd_func(self, template: Template):
-        try:
-            self.lbd_func_aws_object_pre_check()
+        if self.lbd_func_aws_object_ready():
             template.add_resource(self.lbd_func_aws_object, ignore_duplicate=True)
-        except:
-            pass
 
     def create_apigw_resource(self, template: Template):
-        try:
-            self.apigw_resource_aws_object_pre_check()
+        if self.apigw_resource_aws_object_ready():
             template.add_resource(self.apigw_resource_aws_object, ignore_duplicate=True)
-        except:
-            pass
 
     def create_apigw_method(self, template: Template):
-        try:
-            self.apigw_method_aws_object_pre_check()
+        if self.apigw_method_aws_object_ready():
             template.add_resource(self.apigw_method_aws_object, ignore_duplicate=True)
-
-            self.apigw_method_lbd_permission_aws_object_pre_check()
+        if self.apigw_method_lbd_permission_aws_object_ready():
             template.add_resource(self.apigw_method_lbd_permission_aws_object, ignore_duplicate=True)
-        except:
-            pass
 
     def create_apigw_method_options_for_cors(self, template: Template):
-        try:
-            self.apigw_method_options_for_cors_aws_object_pre_check()
+        if self.apigw_method_options_for_cors_aws_object_ready():
             template.add_resource(self.apigw_method_options_for_cors_aws_object, ignore_duplicate=True)
-        except:
-            pass
 
     def create_apigw_authorizer(self, template: Template):
-        try:
-            self.apigw_authorizer_aws_object_pre_check()
+        if self.apigw_authorizer_aws_object_ready():
             template.add_resource(self.apigw_authorizer_aws_object, ignore_duplicate=True)
-
-            self.apigw_authorizer_lbd_permission_aws_object_pre_check()
+        if self.apigw_authorizer_lbd_permission_aws_object_ready():
             template.add_resource(self.apigw_authorizer_lbd_permission_aws_object, ignore_duplicate=True)
-        except:
-            pass
 
     def create_scheduled_job_event(self, template: Template):
-        try:
-            self.scheduled_job_event_rule_aws_objects_pre_check()
+        if self.scheduled_job_event_rule_aws_objects_ready():
             for _, value in self.scheduled_job_event_rule_aws_objects.items():
                 template.add_resource(value, ignore_duplicate=True)
-
-            self.scheduled_job_event_lbd_permission_aws_objects_pre_check()
+        if self.scheduled_job_event_lbd_permission_aws_objects_ready():
             for _, value in self.scheduled_job_event_lbd_permission_aws_objects.items():
                 template.add_resource(value, ignore_duplicate=True)
-        except:
-            pass
+
+    # def create_s3_event_bucket(self, template: Template):
+    #     if self.s3_event_bucket_aws_object_ready():
+    #         template.add_resource(self.s3_event_bucket_aws_object)
 
 
 def lbd_func_config_value_handler(module_name: str,

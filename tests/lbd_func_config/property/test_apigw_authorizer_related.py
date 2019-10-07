@@ -4,7 +4,8 @@ import pytest
 from pytest import raises
 from lbdrabbit.lbd_func_config.lbd_func_config import (
     LbdFuncConfig, NOTHING,
-    Ref
+    Parameter, Ref,
+    awslambda,
 )
 from lbdrabbit.lbd_func_config.tests import new_conf_inst
 
@@ -16,6 +17,7 @@ class TestLbdFunctionConfigApigwAuthorizer(object):
         conf.apigw_restapi = "RestApi"
         conf.apigw_authorizer_token_type_header_field = "auth"
 
+        conf.apigw_authorizer_aws_object_pre_check()
         assert conf.apigw_authorizer_aws_object.AuthType == "custom"
         assert conf.apigw_authorizer_aws_object.Type == "TOKEN"
         assert isinstance(conf.apigw_authorizer_aws_object.RestApiId, Ref)

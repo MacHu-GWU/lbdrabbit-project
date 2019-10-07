@@ -8,6 +8,7 @@ from lbdrabbit.lbd_func_config.lbd_func_config import (
     Ref, GetAtt, ImportValue,
     apigateway,
 )
+from lbdrabbit.lbd_func_config.tests import new_conf_inst
 
 
 class TestLbdFunctionConfigApigwMethodAuthorizer(object):
@@ -79,6 +80,17 @@ class TestLbdFunctionConfigApigwMethodAuthorizer(object):
             apigw_method_authorizer="ApigwAuthorizer",
         )
         assert conf.apigw_method_authorizer_id_for_cf == "ApigwAuthorizer"
+
+
+class TestLbdFunctionConfigApigwMethod(object):
+    def test(self):
+        conf = new_conf_inst()
+        conf.apigw_method_yes = True
+        conf.apigw_restapi = "RestApi"
+        conf.apigw_method_aws_object_pre_check()
+        assert conf.apigw_method_aws_object_ready() is True
+
+
 
 
 if __name__ == "__main__":
