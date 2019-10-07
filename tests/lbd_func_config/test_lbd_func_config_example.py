@@ -11,7 +11,7 @@ from lbdrabbit.lbd_func_config.lbd_func_config import (
     lbd_func_config_value_handler,
     REQUIRED, NOTHING,
     Ref, GetAtt, Sub,
-    awslambda, apigateway, events,
+    awslambda, apigateway, events, s3,
 )
 
 
@@ -52,6 +52,12 @@ lbd_func_config_value_handler(
 )
 
 
+def test_root():
+    conf = access_lbd_config("lbdrabbit.example.handlers")
+    with raises(Exception):
+        conf.apigw_resource_aws_object_pre_check()
+
+
 def test_rest():
     conf = access_lbd_config("lbdrabbit.example.handlers.rest")
     assert conf.identifier == "lbdrabbit.example.handlers.rest.__lbd_func_config__"
@@ -67,6 +73,7 @@ def test_rest():
         conf.apigw_authorizer_aws_object_pre_check()
     with raises(Exception):
         conf.apigw_method_options_for_cors_aws_object_pre_check()
+    assert conf.apigw_method_options_for_cors_aws_object_ready() is False
     with raises(Exception):
         conf.scheduled_job_event_rule_aws_objects_pre_check()
     with raises(Exception):
@@ -96,6 +103,7 @@ def test_rest_users():
         conf.apigw_method_lbd_permission_aws_object_pre_check()
     with raises(Exception):
         conf.apigw_method_options_for_cors_aws_object_pre_check()
+    assert conf.apigw_method_options_for_cors_aws_object_ready() is False
     with raises(Exception):
         conf.apigw_authorizer_aws_object_pre_check()
     with raises(Exception):
@@ -117,6 +125,8 @@ def test_rest_users_get():
     conf = access_lbd_config("lbdrabbit.example.handlers.rest.users.get")
     assert conf.identifier == "lbdrabbit.example.handlers.rest.users.get.__lbd_func_config__"
     assert conf.lbd_func_logic_id == "LbdFuncRestUsersGet"
+    assert conf.apigw_resource_logic_id == "ApigwResourceRestUsers"
+    assert conf.apigw_method_logic_id == "ApigwMethodRestUsersGet"
 
     conf.lbd_func_aws_object_pre_check()
     with raises(Exception):
@@ -124,6 +134,30 @@ def test_rest_users_get():
     conf.apigw_method_aws_object_pre_check()
     conf.apigw_method_lbd_permission_aws_object_pre_check()
     conf.apigw_method_options_for_cors_aws_object_pre_check()
+    assert conf.apigw_method_options_for_cors_aws_object_ready() is True
+    conf.apigw_authorizer_aws_object_pre_check()
+    with raises(Exception):
+        conf.scheduled_job_event_rule_aws_objects_pre_check()
+    with raises(Exception):
+        conf.scheduled_job_event_lbd_permission_aws_objects_pre_check()
+
+    assert conf.apigw_method_authorization_type == "CUSTOM"
+
+
+def test_rest_users_post():
+    conf = access_lbd_config("lbdrabbit.example.handlers.rest.users.post")
+    assert conf.identifier == "lbdrabbit.example.handlers.rest.users.post.__lbd_func_config__"
+    assert conf.lbd_func_logic_id == "LbdFuncRestUsersPost"
+    assert conf.apigw_resource_logic_id == "ApigwResourceRestUsers"
+    assert conf.apigw_method_logic_id == "ApigwMethodRestUsersPost"
+
+    conf.lbd_func_aws_object_pre_check()
+    with raises(Exception):
+        conf.apigw_resource_aws_object_pre_check()
+    conf.apigw_method_aws_object_pre_check()
+    conf.apigw_method_lbd_permission_aws_object_pre_check()
+    conf.apigw_method_options_for_cors_aws_object_pre_check()
+    assert conf.apigw_method_options_for_cors_aws_object_ready() is True
     conf.apigw_authorizer_aws_object_pre_check()
     with raises(Exception):
         conf.scheduled_job_event_rule_aws_objects_pre_check()
@@ -137,13 +171,19 @@ def test_rpc_add_two():
     conf = access_lbd_config("lbdrabbit.example.handlers.rpc.add_two.handler")
     assert conf.identifier == "lbdrabbit.example.handlers.rpc.add_two.handler.__lbd_func_config__"
     assert conf.lbd_func_logic_id == "LbdFuncRpcAddTwoHandler"
+    assert conf.apigw_resource_logic_id == "ApigwResourceRpcAddTwo"
+    assert conf.apigw_method_logic_id == "ApigwMethodRpcAddTwoHandler"
 
     conf.lbd_func_aws_object_pre_check()
     with raises(Exception):
         conf.apigw_resource_aws_object_pre_check()
+    assert conf.apigw_resource_aws_object_ready() is False
     conf.apigw_method_aws_object_pre_check()
+    assert conf.apigw_method_aws_object_ready() is True
     conf.apigw_method_lbd_permission_aws_object_pre_check()
+    assert conf.apigw_method_lbd_permission_aws_object_ready() is True
     conf.apigw_method_options_for_cors_aws_object_pre_check()
+    assert conf.apigw_method_options_for_cors_aws_object_ready() is True
     conf.apigw_authorizer_aws_object_pre_check()
     with raises(Exception):
         conf.scheduled_job_event_rule_aws_objects_pre_check()
@@ -167,6 +207,12 @@ def test_sched_heart_beap_hanlder():
     assert conf.identifier == "lbdrabbit.example.handlers.sched.heart_beap.handler.__lbd_func_config__"
     assert conf.lbd_func_logic_id == "LbdFuncSchedHeartBeapHandler"
 
+    with raises(Exception):
+        conf.apigw_resource_aws_object_pre_check()
+    assert conf.apigw_resource_aws_object_ready() is False
+    assert conf.apigw_method_aws_object_ready() is False
+    assert conf.apigw_method_lbd_permission_aws_object_ready() is False
+
     conf.lbd_func_aws_object_pre_check()
     with raises(Exception):
         conf.apigw_resource_aws_object_pre_check()
@@ -188,6 +234,12 @@ def test_sched_backup_db_handler():
     assert conf.identifier == "lbdrabbit.example.handlers.sched.backup_db.handler.__lbd_func_config__"
     assert conf.lbd_func_logic_id == "LbdFuncSchedBackupDbHandler"
 
+    with raises(Exception):
+        conf.apigw_resource_aws_object_pre_check()
+    assert conf.apigw_resource_aws_object_ready() is False
+    assert conf.apigw_method_aws_object_ready() is False
+    assert conf.apigw_method_lbd_permission_aws_object_ready() is False
+
     assert conf.scheduled_job_expression_list == ["cron(15 10 * * ? *)", ]
     assert isinstance(conf.lbd_func_aws_object, awslambda.Function)
     assert isinstance(conf.scheduled_job_event_rule_aws_objects["cron(15 10 * * ? *)"], events.Rule)
@@ -196,6 +248,11 @@ def test_sched_backup_db_handler():
 
 def test_view_index_handler():
     conf = access_lbd_config("lbdrabbit.example.handlers.view.index.handler")
+    assert conf.identifier == "lbdrabbit.example.handlers.view.index.handler.__lbd_func_config__"
+    assert conf.lbd_func_logic_id == "LbdFuncViewIndexHandler"
+
+    conf.apigw_method_options_for_cors_aws_object_pre_check()
+    assert conf.apigw_method_options_for_cors_aws_object_ready() is False
 
 
 def test_auth_handler():
@@ -203,6 +260,9 @@ def test_auth_handler():
     conf = access_lbd_config("lbdrabbit.example.handlers.auth.handler")
     assert conf.identifier == "lbdrabbit.example.handlers.auth.handler.__lbd_func_config__"
     assert conf.lbd_func_logic_id == "LbdFuncAuthHandler"
+
+    conf.apigw_method_options_for_cors_aws_object_pre_check()
+    assert conf.apigw_method_options_for_cors_aws_object_ready() is False
 
     assert isinstance(conf.apigw_authorizer_aws_object.RestApiId, Ref)
     assert len(conf.apigw_authorizer_aws_object.DependsOn) == 2
@@ -213,6 +273,19 @@ def test_auth_handler():
 
     assert conf.apigw_method_aws_object.AuthorizationType == "CUSTOM"
     assert isinstance(conf.apigw_method_aws_object.AuthorizerId, Ref)
+
+
+def test_event_s3():
+    conf = access_lbd_config("lbdrabbit.example.handlers.event.s3.handler")
+    conf.s3_event_bucket_aws_object_pre_check()
+    assert conf.s3_event_bucket_aws_object_ready() is True
+    conf.s3_event_bucket_lbd_permission_aws_object_pre_check()
+    assert conf.s3_event_bucket_lbd_permission_aws_object_ready() is True
+
+    assert isinstance(conf.s3_event_bucket_aws_object, s3.Bucket)
+
+    # from pprint import pprint
+    # pprint(conf.s3_event_bucket_aws_object.to_dict())
 
 
 if __name__ == "__main__":

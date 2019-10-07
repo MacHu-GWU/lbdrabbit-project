@@ -2,8 +2,8 @@
 
 import boto3
 from lbdrabbit.const import VALID_LBD_HANDLER_FUNC_NAME_LIST, DEFAULT_LBD_HANDLER_FUNC_NAME
-from lbdrabbit.config_inherit.base import config_inherit_handler
-from lbdrabbit.config_inherit.lbd_func_config import (
+from lbdrabbit.lbd_func_config.base import config_inherit_handler
+from lbdrabbit.lbd_func_config.lbd_func_config import (
     LbdFuncConfig,
     DEFAULT_LBD_FUNC_CONFIG_FIELD,
     lbd_func_config_value_handler,

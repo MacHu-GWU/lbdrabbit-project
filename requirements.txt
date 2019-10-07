@@ -4,3 +4,4 @@ superjson==0.0.13
 configirl==0.0.6
 picage==0.1.0
 troposphere_mate==0.0.8
+constant2==0.0.13

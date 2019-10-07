@@ -22,6 +22,7 @@ def get(event, context):
 
 
 def post(event, context):
+    print(event)
     return {
         "status_code": "200",
         "body": json.dumps({"post_data": event})

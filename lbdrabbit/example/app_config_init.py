@@ -11,6 +11,6 @@ app_config.S3_BUCKET_FOR_DEPLOY.set_value("eq-sanhe-for-everything")
 app_config.LAMBDA_CODE_S3_BUCKET.set_value(app_config.S3_BUCKET_FOR_DEPLOY.get_value())
 app_config.LAMBDA_CODE_S3_KEY.set_value("lambda/MacHu-GWU/lbdrabbit-project/{}/source.zip".format(__version__))
 app_config.LAMBDA_LAYER_ARN.set_value([
-    "arn:aws:lambda:us-east-1:110330507156:layer:lbdrabbit:1"
+    "arn:aws:lambda:us-east-1:110330507156:layer:lbdrabbit:2"
 ])
 app_config.AWS_PROFILE_FOR_DEPLOY.set_value("eq_sanhe")

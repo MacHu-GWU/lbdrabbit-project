@@ -2,11 +2,6 @@
 
 from lbdrabbit import LbdFuncConfig
 
-
 __lbd_func_config__ = LbdFuncConfig()
-__lbd_func_config__.s3_lbd_config_list = [
-    LbdFuncConfig.S3EventLambdaConfig(
-        event=LbdFuncConfig.S3EventLambdaConfig.EventEnum.created,
-    )
-]
-
+__lbd_func_config__.apigw_resource_yes = False
+__lbd_func_config__.apigw_method_yes = False

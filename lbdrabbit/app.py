@@ -53,6 +53,15 @@ class AppConfig(ConfigClass):
     The AWS profile name used for your local machine to deploy cloudformation. 
     """
 
+    AWS_PROFILE_FOR_BOTO3 = Derivable()
+
+    @AWS_PROFILE_FOR_BOTO3.getter
+    def get_AWS_PROFILE_FOR_BOTO3(self):
+        if self.is_aws_lambda_runtime():
+            return None
+        else:
+            return self.AWS_PROFILE_FOR_DEPLOY.get_value()
+
     LAMBDA_CODE_S3_KEY = Constant()
     LAMBDA_CODE_S3_BUCKET = Constant()
     LAMBDA_LAYER_ARN = Constant()

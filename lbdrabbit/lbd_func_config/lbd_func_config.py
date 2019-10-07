@@ -125,6 +125,8 @@ class LbdFuncConfig(BaseConfig):
     _scheduled_job_event_lbd_permission_aws_objects_cache = attr.ib(
         default=NOTHING)  # type: typing.Dict[str, awslambda.Permission]
 
+    boto3_ses = attr.ib(default=NOTHING)
+
     # Implementation related private functions
     def _ready_checker_shortener(self, res_name):
         """
@@ -261,17 +263,35 @@ class LbdFuncConfig(BaseConfig):
                 self.s3_event_bucket_logic_id,
                 BucketName=self.s3_event_bucket_name_for_cf,
             )
+            s3_bucket.NotificationConfiguration = self.s3_notification_configuration_aws_property
             self._s3_event_bucket_aws_object_cache = s3_bucket
         return self._s3_event_bucket_aws_object_cache
 
+    _s3_event_bucket_lbd_permission_aws_object_cache = attr.ib(default=NOTHING) # type: awslambda.Permission
+
+    def s3_event_bucket_lbd_permission_aws_object_pre_check(self):
+        self.s3_event_bucket_aws_object_pre_check()
+
+    def s3_event_bucket_lbd_permission_aws_object_ready(self):
+        return self._ready_checker_shortener("s3_event_bucket_lbd_permission")
+
     @property
-    def s3_event_bucket_with_notification_configuration_aws_object(self) -> s3.Bucket:
-        s3_bucket = self.s3_event_bucket_aws_object
-        s3_bucket.NotificationConfiguration = self.s3_notification_configuration_aws_property
-        s3_bucket.DependsOn = [
-            self.lbd_func_aws_object,
-        ]
-        return s3_bucket
+    def s3_event_bucket_lbd_permission_aws_object(self) -> awslambda.Permission:
+        if self._s3_event_bucket_lbd_permission_aws_object_cache is NOTHING:
+            s3_event_bucket_lbd_permission_logic_id = "LbdPermission{}".format(self.s3_event_bucket_logic_id)
+            s3_event_bucket_lbd_permission = awslambda.Permission(
+                title=s3_event_bucket_lbd_permission_logic_id,
+                Action="lambda:InvokeFunction",
+                FunctionName=GetAtt(self.lbd_func_aws_object, "Arn"),
+                Principal="s3.amazonaws.com",
+                SourceArn=GetAtt(self.s3_event_bucket_aws_object, "Arn"),
+                DependsOn=[
+                    self.s3_event_bucket_aws_object,
+                    self.lbd_func_aws_object,
+                ]
+            )
+            self._s3_event_bucket_lbd_permission_aws_object_cache = s3_event_bucket_lbd_permission
+        return self._s3_event_bucket_lbd_permission_aws_object_cache
 
     _root_module_name = attr.ib(default=NOTHING)
     _py_module = attr.ib(default=NOTHING)
@@ -469,6 +489,9 @@ class LbdFuncConfig(BaseConfig):
             说明我们需要的是 Api Method 而不是 Api Resource
         - LbdFuncConfig.apigw_restapi 必须被指定.
         """
+        if not self.rel_module_name:
+            raise ValueError("can't create root resource!")
+
         if self._py_function is not NOTHING:
             raise ValueError("to create a apigateway.Resource, "
                              "the config should not bound with a python function!")
@@ -482,9 +505,6 @@ class LbdFuncConfig(BaseConfig):
 
     @property
     def apigw_resource_aws_object(self) -> apigateway.Resource:
-        if self.apigw_resource_yes is not True:
-            return self._apigw_resource_aws_object_cache
-
         if self._apigw_resource_aws_object_cache is NOTHING:
             apigw_resource = apigateway.Resource(
                 self.apigw_resource_logic_id,
@@ -529,7 +549,7 @@ class LbdFuncConfig(BaseConfig):
             return "POST"
 
     @property
-    def apigw_method_use_authorizer_yes(self):
+    def apigw_method_use_authorizer_yes(self) -> bool:
         """
         Test if this Api Method need an Authorizer.
 
@@ -602,12 +622,18 @@ class LbdFuncConfig(BaseConfig):
             if self.apigw_method_int_type == self.ApiMethodIntType.html:
                 integration_response_200 = apigateway.IntegrationResponse(
                     StatusCode="200",
-                    ResponseParameters={"method.response.header.Content-Type": "'text/html'"},
+                    ResponseParameters={
+                        "method.response.header.Access-Control-Allow-Origin": "'*'",
+                        "method.response.header.Content-Type": "'text/html'"
+                    },
                     ResponseTemplates={"text/html": "$input.path('$')"},
                 )
                 method_response_200 = apigateway.MethodResponse(
                     StatusCode="200",
-                    ResponseParameters={"method.response.header.Content-Type": False},
+                    ResponseParameters={
+                        "method.response.header.Access-Control-Allow-Origin": False,
+                        "method.response.header.Content-Type": False,
+                    },
                     ResponseModels={"application/json": "Empty"},
                 )
             elif self.apigw_method_int_type == self.ApiMethodIntType.rpc:
@@ -686,7 +712,7 @@ class LbdFuncConfig(BaseConfig):
                 Integration=integration,
             )
 
-            if self.apigw_method_authorizer not in [NOTHING, None, "none", "None"]:
+            if self.apigw_method_use_authorizer_yes:
                 apigw_method.AuthorizerId = Ref(self.apigw_method_authorizer)
                 depends_on.append(self.apigw_method_authorizer)
 
@@ -701,7 +727,7 @@ class LbdFuncConfig(BaseConfig):
         self.lbd_func_aws_object_pre_check()
 
     def apigw_method_lbd_permission_aws_object_ready(self):
-        return self._ready_checker_shortener("apigw_method_lbd_permission")
+        return self.apigw_method_aws_object_ready() and self.lbd_func_aws_object_ready()
 
     @property
     def apigw_method_lbd_permission_aws_object(self) -> awslambda.Permission:
@@ -733,10 +759,22 @@ class LbdFuncConfig(BaseConfig):
         return self._apigw_method_lbd_permission_aws_object_cache
 
     def apigw_method_options_for_cors_aws_object_pre_check(self):
-        self.apigw_method_aws_object_pre_check()
+        if self._py_function is NOTHING:
+            raise ValueError("to create a apigateway.Method, "
+                             "the config must be bound with a python function!")
+
+        if self.apigw_restapi is NOTHING:
+            raise ValueError("to create a apigateway.Resource, "
+                             "LbdFuncConfig.apigw_restapi has to be specified")
 
     def apigw_method_options_for_cors_aws_object_ready(self):
-        return self._ready_checker_shortener("apigw_method_options_for_cors")
+        if self.apigw_method_enable_cors_yes is not True:
+            return False
+        try:
+            self.apigw_method_options_for_cors_aws_object_pre_check()
+            return True
+        except:
+            return False
 
     @property
     def apigw_method_options_for_cors_aws_object(self) -> apigateway.Method:
@@ -801,9 +839,6 @@ class LbdFuncConfig(BaseConfig):
                 }
             )
         ]
-
-        self.check_apigw_method_authorization_type()
-        self.check_apigw_method_int_type()
 
         apigw_method = apigateway.Method(
             title="ApigwMethod{}Options".format(
@@ -902,7 +937,7 @@ class LbdFuncConfig(BaseConfig):
         self.apigw_authorizer_aws_object_pre_check()
 
     def apigw_authorizer_lbd_permission_aws_object_ready(self):
-        return self._ready_checker_shortener("apigw_authorizer_lbd_permission")
+        return self.apigw_authorizer_aws_object_ready() and self.lbd_func_aws_object_ready()
 
     @property
     def apigw_authorizer_lbd_permission_aws_object(self) -> awslambda.Permission:
@@ -999,7 +1034,7 @@ class LbdFuncConfig(BaseConfig):
         self.lbd_func_aws_object_pre_check()
 
     def scheduled_job_event_lbd_permission_aws_objects_ready(self):
-        return self._ready_checker_shortener("scheduled_job_event_lbd_permission")
+        return self.scheduled_job_event_rule_aws_objects_ready() and self.lbd_func_aws_object_ready()
 
     @property
     def scheduled_job_event_lbd_permission_aws_objects(self) -> typing.Dict[str, awslambda.Permission]:
@@ -1032,6 +1067,7 @@ class LbdFuncConfig(BaseConfig):
         self.create_apigw_method_options_for_cors(template)
         self.create_apigw_authorizer(template)
         self.create_scheduled_job_event(template)
+        self.create_s3_event_bucket(template)
 
     def create_lbd_func(self, template: Template):
         if self.lbd_func_aws_object_ready():
@@ -1065,9 +1101,11 @@ class LbdFuncConfig(BaseConfig):
             for _, value in self.scheduled_job_event_lbd_permission_aws_objects.items():
                 template.add_resource(value, ignore_duplicate=True)
 
-    # def create_s3_event_bucket(self, template: Template):
-    #     if self.s3_event_bucket_aws_object_ready():
-    #         template.add_resource(self.s3_event_bucket_aws_object)
+    def create_s3_event_bucket(self, template: Template):
+        if self.s3_event_bucket_aws_object_ready():
+            template.add_resource(self.s3_event_bucket_aws_object, ignore_duplicate=True)
+        if self.s3_event_bucket_lbd_permission_aws_object_ready():
+            template.add_resource(self.s3_event_bucket_lbd_permission_aws_object, ignore_duplicate=True)
 
 
 def lbd_func_config_value_handler(module_name: str,
@@ -1107,8 +1145,10 @@ def template_creation_handler(module_name: str,
     for py_current_module, py_parent_module, py_handler_func in walk_lbd_handler(
             module_name, valid_func_name_list):
         current_module_config = getattr(py_current_module, config_field)  # type: LbdFuncConfig
+        print("create aws resource for {}".format(current_module_config.identifier))
         current_module_config.create_aws_resource(template)
 
         if py_handler_func is not None:
             py_handler_func_config = getattr(py_handler_func, config_field)  # type: LbdFuncConfig
+            print("create aws resource for {}".format(py_handler_func_config.identifier))
             py_handler_func_config.create_aws_resource(template)
