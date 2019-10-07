@@ -16,7 +16,8 @@ def upload_cf_template(boto_ses,
     :type bucket_name: str
     :type prefix: str
     :type format_is_json: bool
-    :return:
+
+    :rtype: str
     """
     s3_client = boto_ses.client("s3")
     fname = fingerprint.of_text(template_content)
@@ -27,7 +28,7 @@ def upload_cf_template(boto_ses,
     else:
         ext = "yml"
     s3_key = "{}/{}.{}".format(prefix, fname, ext)
-    res = s3_client.put_object(
+    s3_client.put_object(
         Body=template_content,
         Bucket=bucket_name,
         Key=s3_key,

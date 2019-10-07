@@ -9,6 +9,7 @@ from constant2 import Constant
 from troposphere_mate import Template, Parameter, Tags, Ref, GetAtt, Sub, ImportValue
 from troposphere_mate import awslambda, apigateway, iam, events, s3
 from troposphere_mate import slugify, camelcase, helper_fn_sub
+from troposphere_mate import AWS_ACCOUNT_ID
 
 from .base import BaseConfig, REQUIRED, NOTHING, walk_lbd_handler
 from ..pkg.fingerprint import fingerprint
@@ -38,6 +39,22 @@ class LbdFuncConfig(BaseConfig):
     - pre_exam
     - create_something: 以 create 开头的方法会调用响应的 something_aws_object
         方法, 不过在那之前,
+
+
+    **生成 AWS Object 的设计模式**
+
+    比如, 我们有一个 property method 叫做 lbd_func_aws_object 用于生成
+    ``troposphere_mate.awslambda.Function`` 对象. 而对应的 AWS Resource 名称
+    则是 lbd_func, 这里我们用 <aws_resource_name> 来表示.
+
+    1. ``_<aws_resource_name>_aws_object_cache = attr.ib(default=NOTHING)`` 用于缓存
+    2. ``def <aws_resource_name>_aws_object_pre_check(self)`` 函数, 用于检查是否满足创建
+    ``<aws_resource_name>_aws_object`` 的条件. 如果不满足, 则抛出对应异常, 并给出详细信息.
+    3. ``def <aws_resource_name>_aws_object_ready(self)`` 函数, 返回一个布尔值, 表示是否满足
+    创建 ``<aws_resource_name>_aws_object`` 的条件. 不抛出任何异常.
+    4. ``<aws_resource_name>_yes = attr.ib(default=NOTHING)``, 用于手动开启和关闭
+    该资源的生成. 例如我们手动关闭了, 就算之前的条件检查函数判定满足, 我们依然不会创建之.
+    如果我们手动开启了, 如果条件检查不满足, 那么我们还是不会创建之.
 
     """
     param_env_name = attr.ib(default=REQUIRED)  # type: Parameter
@@ -108,6 +125,26 @@ class LbdFuncConfig(BaseConfig):
     _scheduled_job_event_lbd_permission_aws_objects_cache = attr.ib(
         default=NOTHING)  # type: typing.Dict[str, awslambda.Permission]
 
+    # Implementation related private functions
+    def _ready_checker_shortener(self, res_name):
+        """
+        Implementation use helper function for ``<resource_name>_aws_object_ready``
+        method.
+
+        :type res_name: str
+        :param res_name: resource name. For example: awslambda.Function is
+            lbd_func
+
+        :rtype: bool
+        """
+        if getattr(self, "{}_yes".format(res_name)) is not True:
+            return False
+        try:
+            getattr(self, "{}_aws_object_pre_check".format(res_name))()
+            return True
+        except:
+            return False
+
     # S3 Event Trigger
 
     @attr.s
@@ -131,6 +168,49 @@ class LbdFuncConfig(BaseConfig):
 
             reduced_redundancy_lost_object = "s3:ReducedRedundancyLostObject"
 
+    s3_event_bucket_basename = attr.ib(default=NOTHING)  # type: str
+
+    @property
+    def s3_event_bucket_logic_id(self):
+        """
+        logic id for ``s3.Bucket`` of the Lambda Event Mapping S3 Bucket.
+
+        :rtype: str
+        """
+        if self.s3_event_bucket_basename is NOTHING:
+            raise TypeError
+        if isinstance(self.s3_event_bucket_basename, str):
+            return "S3Bucket{}".format(camelcase(self.s3_event_bucket_basename))
+        else:
+            raise TypeError
+
+    @property
+    def s3_event_bucket_name_for_cf(self) -> typing.Union[str, Sub]:
+        """
+        ``s3.Bucket.BucketName`` field value. ``AWS::AccountId`` is included as
+        prefix.
+
+        :rtype: Sub
+
+        **中文文档**
+
+        生成存储桶的名称. 由于存储桶的名字是全球唯一的, 并且不分 Region, 所以需要加上
+        AWS Account Id 作为名字的前缀, 以避免冲突.
+        """
+        if self.s3_event_bucket_basename is NOTHING:
+            raise TypeError
+        if isinstance(self.s3_event_bucket_basename, str):
+            return Sub(
+                "${AccountId}-${EnvName}-${BucketBasename}",
+                {
+                    "AccountId": Ref(AWS_ACCOUNT_ID),
+                    "EnvName": Ref(self.param_env_name),
+                    "BucketBasename": self.s3_event_bucket_basename,
+                },
+            )
+        else:
+            raise TypeError
+
     s3_event_lbd_config_list = attr.ib(default=NOTHING)  # type: typing.List[LbdFuncConfig.S3EventLambdaConfig]
 
     @property
@@ -149,19 +229,47 @@ class LbdFuncConfig(BaseConfig):
 
         return s3_notification_configuration
 
+    s3_event_bucket_yes = attr.ib(default=NOTHING)
+
+    def s3_event_bucket_aws_object_pre_check(self):
+        if self.s3_event_lbd_config_list is NOTHING:
+            raise ValueError(
+                ("{}.s3_event_lbd_config_list has to be a list of "
+                 "LbdFuncConfig.S3EventLambdaConfig object").format(
+                    self.identifier
+                )
+            )
+        if isinstance(self.s3_event_lbd_config_list, list):
+            if len(self.s3_event_lbd_config_list) == 0:
+                raise ValueError(
+                    "{}.s3_event_lbd_config_list can't be a empty list!" \
+                        .format(self.identifier)
+                )
+
+    def s3_event_bucket_aws_object_ready(self) -> bool:
+        return self._ready_checker_shortener("s3_event_bucket")
+
     _s3_event_bucket_aws_object_cache = attr.ib(default=NOTHING)  # type: s3.Bucket
 
     @property
     def s3_event_bucket_aws_object(self) -> s3.Bucket:
         if self._s3_event_bucket_aws_object_cache is NOTHING:
-            s3_bucket_logic_id = ""
             s3_bucket = s3.Bucket(
-
+                self.s3_event_bucket_logic_id,
+                BucketName=self.s3_event_bucket_name_for_cf,
             )
             self._s3_event_bucket_aws_object_cache = s3_bucket
         return self._s3_event_bucket_aws_object_cache
 
-    #
+    @property
+    def s3_event_bucket_with_notification_configuration_aws_object(self) -> s3.Bucket:
+        s3_bucket = self.s3_event_bucket_aws_object
+        s3_bucket.NotificationConfiguration = self.s3_notification_configuration_aws_property
+        s3_bucket.DependsOn = [
+            self.lbd_func_aws_object,
+        ]
+        return s3_bucket
+
     _root_module_name = attr.ib(default=NOTHING)
     _py_module = attr.ib(default=NOTHING)
     _py_function = attr.ib(default=NOTHING)
@@ -441,7 +549,8 @@ class LbdFuncConfig(BaseConfig):
             # hard coded apigateway.Authorizer logic id
             else:
                 return Ref(self.apigw_method_authorizer)
-        return
+        else:
+            raise TypeError
 
     def apigw_method_aws_object_pre_check(self):
         """
@@ -698,7 +807,7 @@ class LbdFuncConfig(BaseConfig):
 
         return apigw_method
 
-    # apigateway.Authorizer
+    # apigateway.Authorizer related
     @classmethod
     def get_authorizer_id(cls, rel_module_name):
         return "ApigwAuthorizer{}".format(
@@ -729,11 +838,11 @@ class LbdFuncConfig(BaseConfig):
             raise ValueError("to create a apigateway.Resource, "
                              "LbdFuncConfig.apigw_restapi has to be specified")
 
+    def apigw_authorizer_aws_object_ready(self):
+        return self._ready_checker_shortener("apigw_authorizer")
+
     @property
     def apigw_authorizer_aws_object(self) -> apigateway.Authorizer:
-        if self.apigw_authorizer_yes is not True:
-            return self._apigw_authorizer_aws_object_cache
-
         if self._apigw_authorizer_aws_object_cache is NOTHING:
             if self.apigw_authorizer_name is NOTHING:
                 apigw_authorizer_name = self.apigw_authorizer_logic_id
